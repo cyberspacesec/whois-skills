@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档 - Whois Hacker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">Whois Hacker</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="docs.html">文档</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="api.html">API</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="mcp.html">MCP</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="demo.html">演示</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="download.html">下载</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/cyberspacesec/whois-hacker" target="_blank">
+                            <i class="bi bi-github"></i> GitHub
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 文档内容 -->
+    <div class="container py-5 mt-5">
+        <div class="row">
+            <!-- 侧边导航 -->
+            <div class="col-lg-3">
+                <div class="doc-nav">
+                    <h5>目录</h5>
+                    <div class="doc-toc mt-3">
+                        <a href="#installation">安装指南</a>
+                        <a href="#basic-usage">基本使用</a>
+                        <a href="#domains">域名查询</a>
+                        <a href="#batch">批量查询</a>
+                        <a href="#format">输出格式</a>
+                        <a href="#proxy">代理支持</a>
+                        <a href="#idn">国际化域名</a>
+                        <a href="#api-service">API 服务</a>
+                        <a href="#docker">Docker 部署</a>
+                        <a href="#mcp">MCP 集成</a>
+                        <a href="#advanced">高级用法</a>
+                        <a href="#faq">常见问题</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文档主体 -->
+            <div class="col-lg-9 doc-content">
+                <h1 class="mb-4">Whois Hacker 使用文档</h1>
+
+                <section id="installation" class="mb-5">
+                    <h2>安装指南</h2>
+                    <p>有多种方式可以安装和使用 Whois Hacker：</p>
+
+                    <h3>作为 Go 库使用</h3>
+                    <p>如果您是 Go 开发者，可以直接在您的项目中引入 Whois Hacker 包：</p>
+                    <pre><code>go get github.com/cyberspacesec/whois-hacker</code></pre>
+
+                    <p>然后在代码中使用：</p>
+                    <pre><code>package main
+
+import (
+    "fmt"
+    "github.com/cyberspacesec/whois-hacker/pkg/whois"
+)
+
+func main() {
+    // 单个域名查询
+    result, err := whois.ExecuteQuery(&whois.QueryOptions{
+        Domain: "example.com",
+        ValidateResult: true,
+    })
+    if err != nil {
+        fmt.Printf("查询失败: %v\n", err)
+        return
+    }
+    fmt.Printf("域名: %s\n", result.Domain.Domain)
+    fmt.Printf("注册商: %s\n", result.Registrar.Name)
+    fmt.Printf("创建时间: %s\n", result.Domain.CreatedDate)
+    fmt.Printf("过期时间: %s\n", result.Domain.ExpirationDate)
+
+    // 使用代理查询
+    result, err = whois.ExecuteQuery(&whois.QueryOptions{
+        Domain: "example.com",
+        UseProxy: true,
+        ValidateResult: true,
+    })
+
+    // 批量查询
+    aggregator := &whois.QueryAggregator{
+        concurrency: 5,
+    }
+    domains := []string{"example.com", "google.com", "github.com"}
+    for _, domain := range domains {
+        aggregator.AddQuery(domain, &whois.QueryOptions{
+            ValidateResult: true,
+            Priority: 1,
+        })
+    }
+    results := aggregator.ExecuteAll()
+
+    // 使用缓存
+    cache := whois.GetCache()
+    if entry, exists := cache.Get("example.com"); exists {
+        fmt.Printf("从缓存获取: %+v\n", entry)
+    }
+
+    // 设置代理
+    proxyConfig := &whois.ProxyConfig{
+        Enabled: true,
+        Type: "socks5",
+        Address: "127.0.0.1:1080",
+        Username: "user",
+        Password: "pass",
+        Timeout: 10,
+    }
+    if err := whois.SetWhoisProxy(proxyConfig); err != nil {
+        fmt.Printf("设置代理失败: %v\n", err)
+    }
+
+    // 查询 ASN 信息
+    ipv4Ranges, ipv6Ranges, err := whois.GetIPRangesByASN("AS15169")
+    if err != nil {
+        fmt.Printf("查询ASN失败: %v\n", err)
+        return
+    }
+    fmt.Printf("IPv4范围: %v\n", ipv4Ranges)
+    fmt.Printf("IPv6范围: %v\n", ipv6Ranges)
+
+                    <p>更多高级用法：</p>
+                    <ul>
+                        <li>使用 <code>QueryOptions</code> 配置查询参数：
+                            <ul>
+                                <li><code>IntervalMils</code>: 重试间隔（毫秒）</li>
+                                <li><code>MaxRetries</code>: 最大重试次数</li>
+                                <li><code>Priority</code>: 查询优先级</li>
+                                <li><code>Timeout</code>: 查询超时时间</li>
+                                <li><code>RequiredFields</code>: 必需字段验证</li>
+                            </ul>
+                        </li>
+                        <li>使用 <code>QueryResult</code> 获取详细结果：
+                            <ul>
+                                <li><code>Info</code>: 解析后的WHOIS信息</li>
+                                <li><code>RawResponse</code>: 原始响应</li>
+                                <li><code>QueryTime</code>: 查询时间</li>
+                                <li><code>Latency</code>: 查询延迟</li>
+                                <li><code>Server</code>: 使用的服务器</li>
+                                <li><code>ValidationResult</code>: 验证结果</li>
+                            </ul>
+                        </li>
+                        <li>使用缓存功能：
+                            <pre><code>cache := whois.NewWhoisCache(whois.CacheConfig{
+    Enabled: true,
+    Type: "local", // 或 "redis"
+    TTL: 3600,
+    RedisConfig: &whois.RedisConfig{
+        Addr: "localhost:6379",
+        Password: "",
+        DB: 0,
+    },
+    WarmupConfig: &whois.WarmupConfig{
+        Enabled: true,
+        DomainsFile: "domains.txt",
+        Interval: 1000,
+    },
+})</code></pre>
+                        </li>
+                        <li>使用代理池：
+                            <pre><code>pool := whois.GetProxyPool()
+if err := whois.LoadProxiesFromFile("proxies.json"); err != nil {
+    log.Fatal(err)
+}
+pool.StartProxyHealthCheck(time.Minute)
+stats := pool.GetProxyStats()</code></pre>
+                        </li>
+                    </ul>
+
+                    <h3>通过 Go 安装命令行工具</h3>
+                    <p>如果您已经安装了 Go 环境，可以通过以下命令直接安装：</p>
+                    <pre><code>go install github.com/cyberspacesec/whois-hacker/cmd/whois-hacker@latest</code></pre>
+
+                    <h3>从源码编译</h3>
+                    <p>您可以从源码编译安装：</p>
+                    <pre><code>git clone https://github.com/cyberspacesec/whois-hacker.git
+cd whois-hacker
+make build</code></pre>
+                    <p>编译后的可执行文件将位于 <code>bin/</code> 目录下。</p>
+
+                    <h3>下载预编译二进制文件</h3>
+                    <p>您也可以直接从 <a href="https://github.com/cyberspacesec/whois-hacker/releases" target="_blank">GitHub Releases</a> 页面下载适合您操作系统的预编译二进制文件。</p>
+
+                    <h3>使用 Docker</h3>
+                    <p>如果您偏好使用 Docker，可以通过以下命令拉取并运行：</p>
+                    <pre><code>docker pull cyberspacesec/whois-hacker
+docker run -p 8080:8080 cyberspacesec/whois-hacker service</code></pre>
+                </section>
+
+                <section id="basic-usage" class="mb-5">
+                    <h2>基本使用</h2>
+                    <p>Whois Hacker 提供了多种命令和模式，以下是基本的命令结构：</p>
+                    <pre><code>whois-hacker [command] [flags]</code></pre>
+                    
+                    <p>主要命令包括：</p>
+                    <ul>
+                        <li><code>query</code>：查询单个域名</li>
+                        <li><code>batch</code>：批量查询多个域名</li>
+                        <li><code>service</code>：启动 API 服务</li>
+                        <li><code>version</code>：显示版本信息</li>
+                    </ul>
+                    
+                    <p>全局标志：</p>
+                    <ul>
+                        <li><code>--debug</code>：启用调试模式</li>
+                        <li><code>--help</code>：显示帮助信息</li>
+                    </ul>
+                </section>
+
+                <section id="domains" class="mb-5">
+                    <h2>域名查询</h2>
+                    <p>查询单个域名的 WHOIS 信息：</p>
+                    <pre><code>whois-hacker query example.com</code></pre>
+                    
+                    <p>使用指定的 WHOIS 服务器：</p>
+                    <pre><code>whois-hacker query example.com --server whois.verisign-grs.com</code></pre>
+                    
+                    <p>使用不同的输出格式：</p>
+                    <pre><code>whois-hacker query example.com --output-format json</code></pre>
+                    
+                    <p>支持的输出格式包括：</p>
+                    <ul>
+                        <li><code>text</code>：原始文本</li>
+                        <li><code>json</code>：JSON 格式</li>
+                        <li><code>csv</code>：CSV 格式</li>
+                    </ul>
+                </section>
+
+                <section id="batch" class="mb-5">
+                    <h2>批量查询</h2>
+                    <p>批量查询多个域名：</p>
+                    <pre><code>whois-hacker batch -f domains.txt --output-format json --output-file results.json</code></pre>
+                    
+                    <p><code>domains.txt</code> 文件中每行一个域名，示例：</p>
+                    <pre><code>example.com
+google.com
+microsoft.com</code></pre>
+                    
+                    <p>控制并发查询数量：</p>
+                    <pre><code>whois-hacker batch -f domains.txt --concurrency 5</code></pre>
+                    
+                    <p>使用不同的输出目标：</p>
+                    <pre><code>whois-hacker batch -f domains.txt --output-file results.csv --output-format csv</code></pre>
+                </section>
+
+                <section id="format" class="mb-5">
+                    <h2>输出格式</h2>
+                    <p>Whois Hacker 支持多种输出格式，可以使用 <code>--output-format</code> 标志指定：</p>
+                    
+                    <h3>文本格式 (text)</h3>
+                    <p>原始 WHOIS 服务器响应，包含所有信息：</p>
+                    <pre><code>whois-hacker query example.com --output-format text</code></pre>
+                    
+                    <h3>JSON 格式 (json)</h3>
+                    <p>将 WHOIS 信息格式化为 JSON 对象，易于程序处理：</p>
+                    <pre><code>whois-hacker query example.com --output-format json</code></pre>
+                    
+                    <h3>CSV 格式 (csv)</h3>
+                    <p>将结果输出为 CSV 格式，适合导入电子表格软件：</p>
+                    <pre><code>whois-hacker query example.com --output-format csv</code></pre>
+                    
+                    <h3>输出到文件</h3>
+                    <p>使用 <code>--output-file</code> 将结果保存到文件：</p>
+                    <pre><code>whois-hacker query example.com --output-format json --output-file example.json</code></pre>
+                </section>
+
+                <section id="proxy" class="mb-5">
+                    <h2>代理支持</h2>
+                    <p>Whois Hacker 支持通过代理服务器发送 WHOIS 查询：</p>
+                    
+                    <h3>HTTP 代理</h3>
+                    <pre><code>whois-hacker query example.com --proxy http://proxy.example.com:8080</code></pre>
+                    
+                    <h3>SOCKS5 代理</h3>
+                    <pre><code>whois-hacker query example.com --proxy socks5://127.0.0.1:1080</code></pre>
+                    
+                    <h3>带认证的代理</h3>
+                    <pre><code>whois-hacker query example.com --proxy http://username:password@proxy.example.com:8080</code></pre>
+                    
+                    <p>代理配置也可以通过环境变量设置：</p>
+                    <pre><code>export WHOIS_PROXY="http://proxy.example.com:8080"
+whois-hacker query example.com</code></pre>
+                </section>
+
+                <section id="idn" class="mb-5">
+                    <h2>国际化域名</h2>
+                    <p>Whois Hacker 原生支持国际化域名 (IDN)，可以直接查询包含非 ASCII 字符的域名：</p>
+                    
+                    <pre><code>whois-hacker query 例子.中国</code></pre>
+                    
+                    <p>程序会自动将国际化域名转换为 Punycode 格式进行查询。</p>
+                </section>
+
+                <section id="api-service" class="mb-5">
+                    <h2>API 服务</h2>
+                    <p>启动 RESTful API 服务：</p>
+                    <pre><code>whois-hacker service --port 8080</code></pre>
+                    
+                    <p>配置 API 速率限制：</p>
+                    <pre><code>whois-hacker service --rate-limit 10 --rate-limit-period 60</code></pre>
+                    
+                    <p>这将限制每个 IP 地址在 60 秒内最多发起 10 次请求。</p>
+                    
+                    <p>API 服务支持以下端点：</p>
+                    <ul>
+                        <li><code>GET /health</code>：健康检查</li>
+                        <li><code>GET /version</code>：版本信息</li>
+                        <li><code>GET /whois?domain=example.com</code>：查询单个域名</li>
+                    </ul>
+                    
+                    <p>使用 curl 测试 API：</p>
+                    <pre><code>curl "http://localhost:8080/whois?domain=example.com"</code></pre>
+                </section>
+
+                <section id="docker" class="mb-5">
+                    <h2>Docker 部署</h2>
+                    <p>使用 Docker 部署 Whois Hacker 服务：</p>
+                    
+                    <h3>使用官方镜像</h3>
+                    <pre><code>docker run -p 8080:8080 cyberspacesec/whois-hacker service</code></pre>
+                    
+                    <h3>使用 Docker Compose</h3>
+                    <p>创建 <code>docker-compose.yml</code> 文件：</p>
+                    <pre><code>version: '3'
+
+services:
+  whois-hacker:
+    image: cyberspacesec/whois-hacker
+    ports:
+      - "8080:8080"
+    command: service --port 8080 --rate-limit 100 --rate-limit-period 60
+    restart: unless-stopped</code></pre>
+                    
+                    <p>然后启动服务：</p>
+                    <pre><code>docker-compose up -d</code></pre>
+                </section>
+
+                <section id="mcp" class="mb-5">
+                    <h2>MCP 集成</h2>
+                    <p>Whois Hacker 支持 Multi-agent Conversation Protocol (MCP)，使其能够作为 AI 助手的工具使用。</p>
+                    
+                    <h3>MCP 端点</h3>
+                    <p>启动带有 MCP 支持的服务：</p>
+                    <pre><code>whois-hacker service --enable-mcp</code></pre>
+                    
+                    <p>MCP 服务提供以下端点：</p>
+                    <ul>
+                        <li><code>POST /mcp/request_planning</code>：创建请求并计划任务</li>
+                        <li><code>POST /mcp/get_next_task</code>：获取下一个待处理任务</li>
+                        <li><code>POST /mcp/mark_task_done</code>：标记任务为已完成</li>
+                        <li><code>POST /mcp/approve_task_completion</code>：批准任务完成</li>
+                        <li><code>POST /mcp/approve_request_completion</code>：批准请求完成</li>
+                    </ul>
+                    
+                    <h3>集成示例</h3>
+                    <p>AI 助手可以通过 MCP 协议实现自动化 WHOIS 查询，例如：</p>
+                    <pre><code>// 创建查询请求
+POST /mcp/request_planning
+{
+  "originalRequest": "查询域名 example.com 的 WHOIS 信息",
+  "tasks": [
+    {
+      "title": "查询 example.com",
+      "description": "获取 example.com 的 WHOIS 信息"
+    }
+  ]
+}</code></pre>
+                </section>
+
+                <section id="advanced" class="mb-5">
+                    <h2>高级用法</h2>
+                    
+                    <h3>自定义 WHOIS 服务器</h3>
+                    <p>为特定 TLD 指定 WHOIS 服务器：</p>
+                    <pre><code>whois-hacker query example.com --server whois.verisign-grs.com</code></pre>
+                    
+                    <h3>超时设置</h3>
+                    <p>设置查询超时时间：</p>
+                    <pre><code>whois-hacker query example.com --timeout 30</code></pre>
+                    
+                    <h3>重试机制</h3>
+                    <p>配置查询失败重试次数：</p>
+                    <pre><code>whois-hacker query example.com --retry 3</code></pre>
+                    
+                    <h3>调试模式</h3>
+                    <p>启用调试模式查看详细日志：</p>
+                    <pre><code>whois-hacker query example.com --debug</code></pre>
+                </section>
+
+                <section id="faq" class="mb-5">
+                    <h2>常见问题</h2>
+                    
+                    <div class="accordion" id="faqAccordion">
+                        <div class="accordion-item">
+                            <h3 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                    为什么某些域名无法获取完整的 WHOIS 信息？
+                                </button>
+                            </h3>
+                            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    <p>这可能有几个原因：</p>
+                                    <ul>
+                                        <li>域名注册商启用了隐私保护</li>
+                                        <li>WHOIS 服务器限制了查询频率</li>
+                                        <li>注册商使用非标准格式提供 WHOIS 信息</li>
+                                    </ul>
+                                    <p>您可以尝试使用 <code>--server</code> 标志直接指定该 TLD 的 WHOIS 服务器，或者启用 <code>--debug</code> 模式查看详细日志。</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="accordion-item">
+                            <h3 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                    如何处理 WHOIS 查询限速问题？
+                                </button>
+                            </h3>
+                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    <p>许多 WHOIS 服务器会限制查询频率。解决方法包括：</p>
+                                    <ul>
+                                        <li>使用批量查询时降低并发数 <code>--concurrency 1</code></li>
+                                        <li>使用代理服务器轮换 IP 地址</li>
+                                        <li>在查询之间添加延迟 <code>--query-delay 2</code></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="accordion-item">
+                            <h3 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                    为什么我的批量查询很慢？
+                                </button>
+                            </h3>
+                            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    <p>批量查询速度受多种因素影响：</p>
+                                    <ul>
+                                        <li>WHOIS 服务器响应时间</li>
+                                        <li>并发数设置（过高可能导致被限制）</li>
+                                        <li>网络连接质量</li>
+                                        <li>代理服务器性能（如使用代理）</li>
+                                    </ul>
+                                    <p>建议尝试调整 <code>--concurrency</code> 参数找到最佳平衡点。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="py-4 bg-dark text-white">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 mb-3 mb-md-0">
+                    <h5>Whois Hacker</h5>
+                    <p class="text-white-50">
+                        一款功能强大的 WHOIS 信息查询工具，支持批量查询、代理、国际化域名及 AI 集成。
+                    </p>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <h5>链接</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="index.html" class="text-white-50">首页</a></li>
+                        <li><a href="docs.html" class="text-white-50">文档</a></li>
+                        <li><a href="api.html" class="text-white-50">API</a></li>
+                        <li><a href="mcp.html" class="text-white-50">MCP</a></li>
+                        <li><a href="demo.html" class="text-white-50">演示</a></li>
+                        <li><a href="download.html" class="text-white-50">下载</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h5>GitHub</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="https://github.com/cyberspacesec/whois-hacker" class="text-white-50" target="_blank">项目仓库</a></li>
+                        <li><a href="https://github.com/cyberspacesec/whois-hacker/issues" class="text-white-50" target="_blank">问题反馈</a></li>
+                        <li><a href="https://github.com/cyberspacesec/whois-hacker/releases" class="text-white-50" target="_blank">版本历史</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="text-center">
+                <p class="small text-white-50 mb-0">
+                    &copy; 2023 Whois Hacker. 保留所有权利。
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html> 

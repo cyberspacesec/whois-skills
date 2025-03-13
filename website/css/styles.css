@@ -1,0 +1,389 @@
+/* 全局样式 */
+:root {
+    --primary-color: #3498db;
+    --secondary-color: #2c3e50;
+    --accent-color: #e74c3c;
+    --light-bg: #f8f9fa;
+    --dark-bg: #343a40;
+    --code-bg: #282c34;
+    --code-text: #f8f8f2;
+    --code-accent1: #ff79c6;
+    --code-accent2: #50fa7b;
+    --code-accent3: #8be9fd;
+    --code-accent4: #bd93f9;
+    --code-accent5: #f1fa8c;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* 导航栏样式 */
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+/* 主横幅样式 */
+.hero {
+    position: relative;
+    overflow: hidden;
+}
+
+.hero h1 {
+    font-weight: 800;
+    color: var(--secondary-color);
+}
+
+/* 代码预览框 */
+.code-preview {
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.code-preview pre {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* 特性卡片 */
+.card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.feature-icon {
+    text-align: center;
+}
+
+/* 代码块样式 - 确保所有文本都清晰可见 */
+pre {
+    background-color: var(--code-bg);
+    border-radius: 6px;
+    padding: 15px;
+    overflow-x: auto;
+    position: relative;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+code {
+    font-family: 'Fira Code', 'Courier New', Courier, monospace;
+    color: var(--code-text);
+}
+
+/* 确保代码块中的所有文本都有高对比度 */
+pre code {
+    color: var(--code-text);
+    background: transparent;
+    padding: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    letter-spacing: 0.3px;
+}
+
+/* 内联代码样式 */
+p code, li code, td code {
+    background-color: rgba(0,0,0,0.05);
+    color: var(--secondary-color);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* 命令提示符、参数等特殊元素样式 */
+.cmd-prompt {
+    color: var(--code-accent2);
+}
+
+.cmd-flag {
+    color: var(--code-accent1);
+}
+
+.cmd-name {
+    color: var(--code-accent3);
+    font-weight: bold;
+}
+
+/* 默认命令行样式 */
+pre code .command {
+    color: var(--code-accent2);
+}
+
+pre code .param {
+    color: var(--code-accent1);
+}
+
+pre code .string {
+    color: var(--code-accent5);
+}
+
+pre code .comment {
+    color: #6272a4;
+}
+
+pre code .keyword {
+    color: var(--code-accent1);
+}
+
+pre code .number {
+    color: var(--code-accent4);
+}
+
+pre code .path {
+    color: var(--code-accent5);
+}
+
+/* 特殊代码块样式 - 确保高对比度 */
+.doc-content pre code {
+    color: #f8f8f2; /* 浅色文本对深色背景 */
+}
+
+/* 文档页面代码块特殊处理 */
+.doc-content code {
+    color: var(--code-text);
+}
+
+.doc-content pre {
+    background-color: var(--code-bg);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+/* 复制按钮样式 */
+.copy-button-container {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+.copy-button {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 4px;
+    color: #ccc;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+}
+
+.copy-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.copy-button.success {
+    background-color: rgba(72, 199, 116, 0.2);
+    color: #48c774;
+}
+
+.copy-button.error {
+    background-color: rgba(241, 70, 104, 0.2);
+    color: #f14668;
+}
+
+/* 代码预览框增强 */
+.code-preview-container {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    background-color: var(--code-bg);
+}
+
+.code-preview-header {
+    background-color: #1e2227;
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+}
+
+.code-preview-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.code-preview-dot:nth-child(1) {
+    background-color: #ff5f56;
+}
+
+.code-preview-dot:nth-child(2) {
+    background-color: #ffbd2e;
+}
+
+.code-preview-dot:nth-child(3) {
+    background-color: #27c93f;
+}
+
+.code-preview-title {
+    margin-left: 10px;
+    color: #ddd;
+    font-size: 14px;
+}
+
+.code-preview-body {
+    padding: 15px;
+}
+
+.code-preview-body pre {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+.code-preview-body code {
+    color: var(--code-text);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .hero {
+        text-align: center;
+    }
+    
+    .hero .d-flex {
+        justify-content: center;
+    }
+}
+
+/* 文档页面样式 */
+.doc-nav {
+    position: sticky;
+    top: 80px;
+    height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.doc-toc {
+    border-left: 1px solid #dee2e6;
+    padding-left: 1rem;
+}
+
+.doc-toc a {
+    display: block;
+    padding: 0.25rem 0;
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.doc-toc a:hover {
+    color: var(--primary-color);
+}
+
+.doc-content h2 {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.doc-content h3 {
+    margin-top: 1.5rem;
+}
+
+.doc-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.2rem;
+    color: var(--secondary-color);
+}
+
+.doc-content pre code {
+    padding: 0;
+    background-color: transparent;
+}
+
+/* 下载页面样式 */
+.download-option {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+}
+
+.download-option:hover {
+    background-color: #e9ecef;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* API文档样式 */
+.api-endpoint {
+    background-color: #f8f9fa;
+    border-left: 4px solid var(--primary-color);
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 0 5px 5px 0;
+}
+
+.api-method {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.api-method.get {
+    background-color: #61affe;
+    color: white;
+}
+
+.api-method.post {
+    background-color: #49cc90;
+    color: white;
+}
+
+.api-params-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.api-params-table th,
+.api-params-table td {
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+}
+
+.api-params-table th {
+    background-color: #f8f9fa;
+}
+
+/* MCP文档样式 */
+.mcp-workflow {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.mcp-step {
+    display: flex;
+    margin-bottom: 15px;
+    align-items: flex-start;
+}
+
+.mcp-step-number {
+    width: 30px;
+    height: 30px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    flex-shrink: 0;
+} 

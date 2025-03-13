@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线演示 - Whois Hacker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">Whois Hacker</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="docs.html">文档</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="api.html">API</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="mcp.html">MCP</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="demo.html">演示</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="download.html">下载</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/cyberspacesec/whois-hacker" target="_blank">
+                            <i class="bi bi-github"></i> GitHub
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 演示标题 -->
+    <section class="container py-5 mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 text-center">
+                <h1 class="display-5 fw-bold mb-4">Whois Hacker 在线演示</h1>
+                <p class="lead mb-4">
+                    通过这个在线演示，您可以体验 Whois Hacker 工具的功能，无需安装即可查询域名信息。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 演示工具 -->
+    <section class="container py-3 mb-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light py-3">
+                <h3 class="mb-0">域名 WHOIS 查询</h3>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <div class="input-group mb-3">
+                            <input type="text" id="domainInput" class="form-control" placeholder="输入域名 (例如: example.com)" aria-label="Domain name">
+                            <button class="btn btn-primary" type="button" id="queryButton">
+                                <i class="bi bi-search"></i> 查询
+                            </button>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="useProxyCheck">
+                            <label class="form-check-label" for="useProxyCheck">
+                                使用代理服务器 (适用于受限区域)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-secondary" type="button" id="randomDomainButton">
+                                <i class="bi bi-shuffle"></i> 随机示例
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" id="clearButton">
+                                <i class="bi bi-x-circle"></i> 清除结果
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4" id="loadingIndicator" style="display: none;">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">查询中...</span>
+                        </div>
+                    </div>
+                    <p class="text-center mt-2">正在查询域名信息，请稍候...</p>
+                </div>
+
+                <div class="mt-4" id="resultSection" style="display: none;">
+                    <h4>查询结果</h4>
+                    <div class="result-container">
+                        <pre class="result-box"><code id="resultContent">准备查询...</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 批量查询演示 -->
+    <section class="container py-3 mb-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light py-3">
+                <h3 class="mb-0">批量域名查询</h3>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label for="batchDomainsInput" class="form-label">输入多个域名 (每行一个)</label>
+                            <textarea class="form-control" id="batchDomainsInput" rows="5" placeholder="example.com&#10;google.com&#10;github.com"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="d-grid">
+                            <button class="btn btn-primary" type="button" id="batchQueryButton">
+                                <i class="bi bi-search"></i> 批量查询
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary" type="button" id="fillSampleButton">
+                                <i class="bi bi-list-check"></i> 填充示例域名
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4" id="batchLoadingIndicator" style="display: none;">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">批量查询中...</span>
+                        </div>
+                    </div>
+                    <p class="text-center mt-2">正在批量查询域名信息，请稍候...</p>
+                </div>
+
+                <div class="mt-4" id="batchResultSection" style="display: none;">
+                    <h4>批量查询结果</h4>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>域名</th>
+                                    <th>状态</th>
+                                    <th>注册商</th>
+                                    <th>创建日期</th>
+                                    <th>到期日期</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchResultTable">
+                                <!-- 结果将在这里动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 功能说明 -->
+    <section class="container py-3 mb-5">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header bg-light py-3">
+                        <h3 class="mb-0">演示功能限制</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                出于演示目的，每次查询可能有延迟
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                每日查询次数限制为 50 次
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-layers-half text-secondary me-2"></i>
+                                批量查询限制为一次最多 10 个域名
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-lock text-danger me-2"></i>
+                                某些顶级域名可能因服务器限制无法查询
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-download text-success me-2"></i>
+                                下载完整版以解除所有限制
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header bg-light py-3">
+                        <h3 class="mb-0">为什么选择完整版</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <i class="bi bi-lightning-charge text-warning me-2"></i>
+                                无限制查询次数和域名数量
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-shield-check text-success me-2"></i>
+                                支持所有 WHOIS 服务器和顶级域名
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-globe text-primary me-2"></i>
+                                本地运行，无网络延迟
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-hdd-network text-info me-2"></i>
+                                完整的代理和网络配置选项
+                            </li>
+                            <li class="list-group-item">
+                                <i class="bi bi-cpu text-danger me-2"></i>
+                                可以与其他系统集成的 API 和 MCP
+                            </li>
+                        </ul>
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="download.html" class="btn btn-primary">
+                                <i class="bi bi-download"></i> 下载完整版
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="py-4 bg-dark text-white">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 mb-3 mb-md-0">
+                    <h5>Whois Hacker</h5>
+                    <p class="text-white-50">
+                        一款功能强大的 WHOIS 信息查询工具，支持批量查询、代理、国际化域名及 AI 集成。
+                    </p>
+                </div>
+                <div class="col-md-3 mb-3 mb-md-0">
+                    <h5>链接</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="index.html" class="text-white-50">首页</a></li>
+                        <li><a href="docs.html" class="text-white-50">文档</a></li>
+                        <li><a href="api.html" class="text-white-50">API</a></li>
+                        <li><a href="mcp.html" class="text-white-50">MCP</a></li>
+                        <li><a href="download.html" class="text-white-50">下载</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h5>GitHub</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="https://github.com/cyberspacesec/whois-hacker" class="text-white-50" target="_blank">项目仓库</a></li>
+                        <li><a href="https://github.com/cyberspacesec/whois-hacker/issues" class="text-white-50" target="_blank">问题反馈</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="my-4">
+            <div class="text-center">
+                <p class="small text-white-50 mb-0">
+                    &copy; 2023 Whois Hacker. 保留所有权利。
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+        // 演示页面特有的脚本
+        document.addEventListener('DOMContentLoaded', function() {
+            // 随机域名列表
+            const sampleDomains = [
+                'google.com', 'github.com', 'microsoft.com', 'apple.com', 
+                'amazon.com', 'twitter.com', 'facebook.com', 'netflix.com',
+                'baidu.com', 'alibaba.com', 'tencent.com', 'qq.com'
+            ];
+            
+            // DOM 元素
+            const domainInput = document.getElementById('domainInput');
+            const queryButton = document.getElementById('queryButton');
+            const randomDomainButton = document.getElementById('randomDomainButton');
+            const clearButton = document.getElementById('clearButton');
+            const resultSection = document.getElementById('resultSection');
+            const resultContent = document.getElementById('resultContent');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const useProxyCheck = document.getElementById('useProxyCheck');
+            
+            // 批量查询元素
+            const batchDomainsInput = document.getElementById('batchDomainsInput');
+            const batchQueryButton = document.getElementById('batchQueryButton');
+            const fillSampleButton = document.getElementById('fillSampleButton');
+            const batchResultSection = document.getElementById('batchResultSection');
+            const batchResultTable = document.getElementById('batchResultTable');
+            const batchLoadingIndicator = document.getElementById('batchLoadingIndicator');
+
+            // API 地址 - 从当前域名中构建或使用配置的地址 
+            const apiBaseUrl = getApiBaseUrl();
+            
+            // 查询按钮点击事件
+            queryButton.addEventListener('click', function() {
+                const domain = domainInput.value.trim();
+                if (domain) {
+                    performWhoisQuery(domain);
+                } else {
+                    showErrorMessage('请输入有效的域名');
+                }
+            });
+            
+            // 随机域名按钮点击事件
+            randomDomainButton.addEventListener('click', function() {
+                const randomIndex = Math.floor(Math.random() * sampleDomains.length);
+                domainInput.value = sampleDomains[randomIndex];
+            });
+            
+            // 清除按钮点击事件
+            clearButton.addEventListener('click', function() {
+                resultSection.style.display = 'none';
+                resultContent.textContent = '准备查询...';
+                domainInput.value = '';
+            });
+            
+            // 批量查询填充示例
+            fillSampleButton.addEventListener('click', function() {
+                // 选择5个随机域名
+                const selectedDomains = [];
+                const availableDomains = [...sampleDomains];
+                
+                for (let i = 0; i < 5; i++) {
+                    if (availableDomains.length === 0) break;
+                    const randomIndex = Math.floor(Math.random() * availableDomains.length);
+                    selectedDomains.push(availableDomains[randomIndex]);
+                    availableDomains.splice(randomIndex, 1);
+                }
+                
+                batchDomainsInput.value = selectedDomains.join('\n');
+            });
+            
+            // 批量查询按钮事件
+            batchQueryButton.addEventListener('click', function() {
+                const domainsText = batchDomainsInput.value.trim();
+                if (domainsText) {
+                    const domains = domainsText.split('\n')
+                        .map(d => d.trim())
+                        .filter(d => d.length > 0);
+                    
+                    if (domains.length > 10) {
+                        showErrorMessage('演示版本限制最多查询10个域名，请减少域名数量');
+                        return;
+                    }
+                    
+                    performBatchWhoisQuery(domains);
+                } else {
+                    showErrorMessage('请输入至少一个有效的域名');
+                }
+            });
+            
+            // 执行 WHOIS 查询
+            function performWhoisQuery(domain) {
+                // 显示加载指示器
+                loadingIndicator.style.display = 'block';
+                resultSection.style.display = 'none';
+                
+                // 构建API查询参数
+                const useProxy = useProxyCheck.checked;
+                const queryParams = new URLSearchParams({
+                    domain: domain,
+                    proxy: useProxy ? 'true' : 'false'
+                });
+                
+                // 调用API
+                fetch(`${apiBaseUrl}/whois?${queryParams}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 隐藏加载指示器
+                        loadingIndicator.style.display = 'none';
+                        resultSection.style.display = 'block';
+                        
+                        // 格式化并显示结果
+                        if (data && data.success) {
+                            const formattedResult = formatWhoisResult(data.data);
+                            resultContent.textContent = formattedResult;
+                        } else {
+                            const errorMessage = data && data.error ? data.error : '查询失败，未知错误';
+                            resultContent.textContent = `查询失败: ${errorMessage}`;
+                        }
+                    })
+                    .catch(error => {
+                        // 错误处理
+                        loadingIndicator.style.display = 'none';
+                        resultSection.style.display = 'block';
+                        resultContent.textContent = `查询错误: ${error.message}`;
+                        console.error('查询错误:', error);
+                        
+                        // 如果API不可用，回退到模拟数据（仅用于演示）
+                        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                            const fallbackResult = generateMockWhoisResult(domain, useProxy);
+                            resultContent.textContent = 
+                                `⚠️ API服务不可用，显示模拟数据 ⚠️\n\n${fallbackResult}`;
+                        }
+                    });
+            }
+            
+            // 执行批量 WHOIS 查询
+            function performBatchWhoisQuery(domains) {
+                // 显示加载指示器
+                batchLoadingIndicator.style.display = 'block';
+                batchResultSection.style.display = 'none';
+                
+                // 清空结果表
+                while (batchResultTable.querySelector('tbody').firstChild) {
+                    batchResultTable.querySelector('tbody').firstChild.remove();
+                }
+                
+                // 使用Promise.all处理多个查询
+                const queryPromises = domains.map(domain => {
+                    // 构建API查询参数
+                    const useProxy = useProxyCheck.checked;
+                    const queryParams = new URLSearchParams({
+                        domain: domain,
+                        proxy: useProxy ? 'true' : 'false'
+                    });
+                    
+                    // 返回promise
+                    return fetch(`${apiBaseUrl}/whois?${queryParams}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! Status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            return { domain, data, success: true };
+                        })
+                        .catch(error => {
+                            console.error(`查询 ${domain} 错误:`, error);
+                            // 如果API不可用，回退到模拟数据
+                            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                                return { 
+                                    domain, 
+                                    data: {
+                                        success: true,
+                                        data: parseMockWhoisResult(domain, useProxy)
+                                    }, 
+                                    success: true,
+                                    isMock: true 
+                                };
+                            }
+                            return { domain, error: error.message, success: false };
+                        });
+                });
+                
+                // 处理所有请求
+                Promise.all(queryPromises)
+                    .then(results => {
+                        // 隐藏加载指示器
+                        batchLoadingIndicator.style.display = 'none';
+                        batchResultSection.style.display = 'block';
+                        
+                        // 填充结果表
+                        results.forEach(result => {
+                            appendBatchResult(result);
+                        });
+                    })
+                    .catch(error => {
+                        // 错误处理
+                        batchLoadingIndicator.style.display = 'none';
+                        batchResultSection.style.display = 'block';
+                        
+                        showErrorMessage(`批量查询失败: ${error.message}`);
+                        console.error('批量查询失败:', error);
+                    });
+            }
+            
+            // 添加批量结果到表格
+            function appendBatchResult(result) {
+                const tbody = batchResultTable.querySelector('tbody');
+                const row = document.createElement('tr');
+                
+                // 域名列
+                const domainCell = document.createElement('td');
+                domainCell.textContent = result.domain;
+                row.appendChild(domainCell);
+                
+                // 状态列
+                const statusCell = document.createElement('td');
+                if (result.success) {
+                    if (result.isMock) {
+                        statusCell.innerHTML = '<span class="badge bg-warning">模拟数据</span>';
+                    } else {
+                        statusCell.innerHTML = '<span class="badge bg-success">查询成功</span>';
+                    }
+                } else {
+                    statusCell.innerHTML = '<span class="badge bg-danger">查询失败</span>';
+                }
+                row.appendChild(statusCell);
+                
+                // 详情列
+                const detailsCell = document.createElement('td');
+                if (result.success) {
+                    const data = result.data.data;
+                    if (data) {
+                        // 创建展示主要信息的按钮
+                        const detailsButton = document.createElement('button');
+                        detailsButton.className = 'btn btn-sm btn-outline-primary';
+                        detailsButton.textContent = '查看详情';
+                        detailsButton.addEventListener('click', () => {
+                            showWhoisDetails(result);
+                        });
+                        detailsCell.appendChild(detailsButton);
+                    } else {
+                        detailsCell.textContent = '没有有效数据';
+                    }
+                } else {
+                    detailsCell.textContent = result.error || '未知错误';
+                }
+                row.appendChild(detailsCell);
+                
+                tbody.appendChild(row);
+            }
+            
+            // 显示WHOIS详情模态框
+            function showWhoisDetails(result) {
+                // 如果已有模态框则先移除
+                let detailsModal = document.getElementById('whoisDetailsModal');
+                if (detailsModal) {
+                    detailsModal.remove();
+                }
+                
+                // 创建模态框
+                detailsModal = document.createElement('div');
+                detailsModal.className = 'modal fade';
+                detailsModal.id = 'whoisDetailsModal';
+                detailsModal.tabIndex = '-1';
+                detailsModal.setAttribute('aria-labelledby', 'whoisDetailsModalLabel');
+                detailsModal.setAttribute('aria-hidden', 'true');
+                
+                // 创建模态框内容
+                detailsModal.innerHTML = `
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="whoisDetailsModalLabel">WHOIS详情: ${result.domain}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <pre class="result-box"><code>${formatWhoisResult(result.data.data)}</code></pre>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 添加到页面并显示
+                document.body.appendChild(detailsModal);
+                const modal = new bootstrap.Modal(detailsModal);
+                modal.show();
+            }
+            
+            // 格式化WHOIS结果为可读文本
+            function formatWhoisResult(data) {
+                if (!data) return '没有数据';
+                
+                let result = '';
+                
+                // 域名基本信息
+                if (data.domain) {
+                    result += `域名: ${data.domain.domain || 'N/A'}\n`;
+                    result += `注册商: ${data.registrar ? data.registrar.registrar_name || 'N/A' : 'N/A'}\n`;
+                    result += `注册日期: ${data.domain.created_date || 'N/A'}\n`;
+                    result += `到期日期: ${data.domain.expiration_date || 'N/A'}\n`;
+                    result += `更新日期: ${data.domain.updated_date || 'N/A'}\n`;
+                }
+                
+                // 状态信息
+                if (data.domain && data.domain.status) {
+                    result += '\n状态:\n';
+                    if (Array.isArray(data.domain.status)) {
+                        data.domain.status.forEach(status => {
+                            result += `- ${status}\n`;
+                        });
+                    } else {
+                        result += `- ${data.domain.status}\n`;
+                    }
+                }
+                
+                // 服务器信息
+                if (data.domain && data.domain.name_servers) {
+                    result += '\n名称服务器:\n';
+                    if (Array.isArray(data.domain.name_servers)) {
+                        data.domain.name_servers.forEach(ns => {
+                            result += `- ${ns}\n`;
+                        });
+                    } else {
+                        result += `- ${data.domain.name_servers}\n`;
+                    }
+                }
+                
+                // DNSSEC信息
+                if (data.domain && data.domain.dnssec) {
+                    result += `\nDNSSEC: ${data.domain.dnssec}\n`;
+                }
+                
+                // 联系人信息 - 注册人
+                if (data.registrant) {
+                    result += '\n注册人信息:\n';
+                    result += `组织: ${data.registrant.organization || 'N/A'}\n`;
+                    result += `名称: ${data.registrant.name || 'N/A'}\n`;
+                    result += `电子邮件: ${data.registrant.email || 'N/A'}\n`;
+                    result += `电话: ${data.registrant.phone || 'N/A'}\n`;
+                    
+                    // 地址信息
+                    let address = '';
+                    if (data.registrant.street) address += data.registrant.street + ', ';
+                    if (data.registrant.city) address += data.registrant.city + ', ';
+                    if (data.registrant.province) address += data.registrant.province + ', ';
+                    if (data.registrant.postal_code) address += data.registrant.postal_code + ', ';
+                    if (data.registrant.country) address += data.registrant.country;
+                    
+                    if (address) {
+                        result += `地址: ${address}\n`;
+                    }
+                }
+                
+                // 其他可能的信息...
+                
+                return result;
+            }
+            
+            // 获取API基础URL
+            function getApiBaseUrl() {
+                // 首先尝试从同域获取API
+                const currentHost = window.location.hostname;
+                const currentProto = window.location.protocol;
+                
+                // 检查是否在本地开发环境
+                if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+                    // 假设API在8080端口
+                    return `${currentProto}//${currentHost}:8080/api`;
+                }
+                
+                // 生产环境 - 假设API与网站在同一域下的/api路径
+                return `${currentProto}//${currentHost}/api`;
+            }
+
+            // 显示错误消息
+            function showErrorMessage(message) {
+                // 可以替换为更优雅的通知
+                alert(message);
+            }
+            
+            // 仅用于API不可用时的模拟数据
+            function generateMockWhoisResult(domain, useProxy) {
+                const registrar = getRandomRegistrar();
+                const createdDate = getRandomDate(1, 15);
+                const expiryDate = getRandomDate(1, 3, true);
+                const updatedDate = getRandomDate(0, 1);
+                const nameServers = getRandomNameServers();
+                
+                return `域名: ${domain}
+注册商: ${registrar}
+注册日期: ${createdDate}
+到期日期: ${expiryDate}
+更新日期: ${updatedDate}
+
+状态:
+- clientTransferProhibited
+- clientDeleteProhibited
+- clientUpdateProhibited
+
+名称服务器:
+${nameServers.map(ns => `- ${ns}`).join('\n')}
+
+DNSSEC: unsigned
+
+注册人信息:
+组织: Example Organization
+名称: Domain Administrator
+电子邮件: admin@${domain}
+电话: +1.5555555555
+地址: 123 Example Street, Example City, EX, 12345, US
+
+⚠️ 注意: 这是模拟数据，仅用于演示目的 ⚠️
+${useProxy ? '使用了代理服务' : '未使用代理服务'}
+`;
+            }
+            
+            // 将模拟WHOIS结果解析为对象格式
+            function parseMockWhoisResult(domain, useProxy) {
+                const registrar = getRandomRegistrar();
+                const createdDate = getRandomDate(1, 15);
+                const expiryDate = getRandomDate(1, 3, true);
+                const updatedDate = getRandomDate(0, 1);
+                const nameServers = getRandomNameServers();
+                
+                return {
+                    domain: {
+                        domain: domain,
+                        created_date: createdDate,
+                        expiration_date: expiryDate,
+                        updated_date: updatedDate,
+                        status: [
+                            'clientTransferProhibited',
+                            'clientDeleteProhibited',
+                            'clientUpdateProhibited'
+                        ],
+                        name_servers: nameServers,
+                        dnssec: 'unsigned'
+                    },
+                    registrar: {
+                        registrar_name: registrar
+                    },
+                    registrant: {
+                        organization: 'Example Organization',
+                        name: 'Domain Administrator',
+                        email: `admin@${domain}`,
+                        phone: '+1.5555555555',
+                        street: '123 Example Street',
+                        city: 'Example City',
+                        province: 'EX',
+                        postal_code: '12345',
+                        country: 'US'
+                    }
+                };
+            }
+            
+            // 辅助函数 - 获取随机注册商
+            function getRandomRegistrar() {
+                const registrars = [
+                    'GoDaddy.com, LLC',
+                    'Namecheap, Inc.',
+                    'eName Technology Co., Ltd.',
+                    'Alibaba Cloud Computing Ltd.',
+                    'Amazon Registrar, Inc.',
+                    'Google LLC',
+                    'MarkMonitor Inc.',
+                    'CSC Corporate Domains, Inc.',
+                    'Dynadot, LLC',
+                    'Network Solutions, LLC'
+                ];
+                
+                return registrars[Math.floor(Math.random() * registrars.length)];
+            }
+            
+            // 辅助函数 - 获取随机日期
+            function getRandomDate(minYearsAgo, maxYearsAgo, isFuture = false) {
+                const now = new Date();
+                const minYear = isFuture ? now.getFullYear() : now.getFullYear() - maxYearsAgo;
+                const maxYear = isFuture ? now.getFullYear() + maxYearsAgo : now.getFullYear() - minYearsAgo;
+                
+                const year = minYear + Math.floor(Math.random() * (maxYear - minYear + 1));
+                const month = 1 + Math.floor(Math.random() * 12);
+                const day = 1 + Math.floor(Math.random() * 28);
+                
+                return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            }
+            
+            // 辅助函数 - 获取随机名称服务器
+            function getRandomNameServers() {
+                const baseNames = ['ns1', 'ns2', 'ns3', 'ns4'];
+                const domains = [
+                    'google.com',
+                    'cloudflare.com',
+                    'amazonaws.com',
+                    'azure-dns.com',
+                    'domaincontrol.com'
+                ];
+                
+                const selectedDomain = domains[Math.floor(Math.random() * domains.length)];
+                return baseNames.map(base => `${base}.${selectedDomain}`);
+            }
+        });
+    </script>
+</body>
+</html> 
