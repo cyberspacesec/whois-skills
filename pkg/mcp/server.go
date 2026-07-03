@@ -226,3 +226,77 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 
 	s.respondJSON(w, http.StatusOK, output)
 }
+
+// ============================================================
+// http.HandlerFunc 包装器（用于 http.ServeMux 集成）
+// ============================================================
+
+// HandleRequestPlanning 返回请求规划处理的http.HandlerFunc
+func (s *Server) HandleRequestPlanning() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleRequestPlanning(w, r)
+	}
+}
+
+// HandleGetNextTask 返回获取下一任务的http.HandlerFunc
+func (s *Server) HandleGetNextTask() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleGetNextTask(w, r)
+	}
+}
+
+// HandleMarkTaskDone 返回标记任务完成的http.HandlerFunc
+func (s *Server) HandleMarkTaskDone() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleMarkTaskDone(w, r)
+	}
+}
+
+// HandleApproveTaskCompletion 返回批准任务完成的http.HandlerFunc
+func (s *Server) HandleApproveTaskCompletion() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleApproveTaskCompletion(w, r)
+	}
+}
+
+// HandleApproveRequestCompletion 返回批准请求完成的http.HandlerFunc
+func (s *Server) HandleApproveRequestCompletion() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleApproveRequestCompletion(w, r)
+	}
+}
+
+// HandleOpenTaskDetails 返回查看任务详情的http.HandlerFunc
+func (s *Server) HandleOpenTaskDetails() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleOpenTaskDetails(w, r)
+	}
+}
+
+// HandleListRequests 返回列出请求的http.HandlerFunc
+func (s *Server) HandleListRequests() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleListRequests(w, r)
+	}
+}
+
+// HandleAddTasksToRequest 返回添加任务到请求的http.HandlerFunc
+func (s *Server) HandleAddTasksToRequest() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleAddTasksToRequest(w, r)
+	}
+}
+
+// HandleUpdateTask 返回更新任务的http.HandlerFunc
+func (s *Server) HandleUpdateTask() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleUpdateTask(w, r)
+	}
+}
+
+// HandleDeleteTask 返回删除任务的http.HandlerFunc
+func (s *Server) HandleDeleteTask() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.handleDeleteTask(w, r)
+	}
+}

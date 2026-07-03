@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/likexian/whois"
@@ -39,6 +40,12 @@ type QueryOptions struct {
 
 	// RequiredFields 必需的字段列表
 	RequiredFields []string `json:"required_fields,omitempty"`
+
+	// FollowReferral 是否跟随WHOIS引导查询，默认为true
+	FollowReferral bool `json:"follow_referral,omitempty"`
+
+	// MaxReferrals 最大引导查询次数，默认为3
+	MaxReferrals int `json:"max_referrals,omitempty"`
 }
 
 // QueryResult WHOIS查询结果
@@ -91,8 +98,9 @@ type QueryAggregator struct {
 	queue PriorityQueue
 
 	// 并发控制
-	concurrency int
-	semaphore   chan struct{}
+	concurrency    int
+	semaphore      chan struct{}
+	progressCallback ProgressCallback
 
 	// 统计信息
 	stats QueryStats
@@ -122,6 +130,30 @@ type QueryStats struct {
 	ValidationFailures int64
 }
 
+// BatchResult 批量查询结果
+type BatchResult struct {
+	// 成功结果映射
+	Results map[string]*QueryResult `json:"results"`
+
+	// 失败结果映射
+	Errors map[string]error `json:"errors"`
+
+	// 统计信息
+	Stats QueryStats `json:"stats"`
+}
+
+// ProgressCallback 进度回调函数类型
+type ProgressCallback func(completed int, total int, domain string, result *QueryResult, err error)
+
+// AggregatorConfig 聚合器配置
+type AggregatorConfig struct {
+	// 并发数
+	Concurrency int
+
+	// 进度回调
+	ProgressCallback ProgressCallback
+}
+
 // PriorityQueue 优先级队列
 type PriorityQueue []*QueryTask
 
@@ -149,24 +181,66 @@ func (q *QueryOptions) GetMaxRetriesOrDefault() int {
 	return q.MaxRetries
 }
 
+// GetMaxReferralsOrDefault 返回最大引导查询次数，如未设置则使用默认值
+func (q *QueryOptions) GetMaxReferralsOrDefault() int {
+	if q.MaxReferrals <= 0 {
+		q.MaxReferrals = 3
+	}
+	return q.MaxReferrals
+}
+
+// NewQueryAggregator 创建新的查询聚合器
+func NewQueryAggregator(config AggregatorConfig) *QueryAggregator {
+	concurrency := config.Concurrency
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+	return &QueryAggregator{
+		results:         make(map[string]*QueryResult),
+		queue:           make(PriorityQueue, 0),
+		concurrency:     concurrency,
+		semaphore:       make(chan struct{}, concurrency),
+		progressCallback: config.ProgressCallback,
+	}
+}
+
+// isRetryableError 判断错误是否可重试
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	wrapped := CheckError(err)
+	return wrapped.IsRetryable()
+}
+
 // ExecuteQuery 执行WHOIS查询，返回解析后的WHOIS信息
 // 这个函数会自动处理国际化域名，错误重试以及WHOIS响应解析
 func ExecuteQuery(q *QueryOptions) (*whoisparser.WhoisInfo, error) {
-	result, err := ExecuteQueryWithResult(q)
+	return ExecuteQueryWithContext(context.Background(), q)
+}
+
+// ExecuteQueryWithResult 执行WHOIS查询，返回完整的查询结果
+func ExecuteQueryWithResult(q *QueryOptions) (*QueryResult, error) {
+	return ExecuteQueryWithResultContext(context.Background(), q)
+}
+
+// ExecuteQueryWithContext 使用上下文执行WHOIS查询，返回解析后的WHOIS信息
+func ExecuteQueryWithContext(ctx context.Context, q *QueryOptions) (*whoisparser.WhoisInfo, error) {
+	result, err := ExecuteQueryWithResultContext(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 	return result.Info, nil
 }
 
-// ExecuteQueryWithResult 执行WHOIS查询，返回完整的查询结果
-func ExecuteQueryWithResult(q *QueryOptions) (*QueryResult, error) {
+// ExecuteQueryWithResultContext 使用上下文执行WHOIS查询，返回完整的查询结果
+func ExecuteQueryWithResultContext(ctx context.Context, q *QueryOptions) (*QueryResult, error) {
 	if q == nil {
 		return nil, fmt.Errorf("查询选项不能为空")
 	}
 
 	if q.Domain == "" {
-		return nil, fmt.Errorf("域名不能为空")
+		return nil, NewWhoisError(ErrDomainEmpty, "域名不能为空", nil)
 	}
 
 	// 设置默认值
@@ -174,51 +248,89 @@ func ExecuteQueryWithResult(q *QueryOptions) (*QueryResult, error) {
 		q.Timeout = 10
 	}
 
+	maxRetries := q.GetMaxRetriesOrDefault()
+	interval := q.GetIntervalMilsOrDefault()
+
 	startTime := time.Now()
 	result := &QueryResult{
 		QueryTime: startTime,
 		UsedProxy: q.UseProxy,
 	}
 
-	// 获取WHOIS服务器
-	server, err := GetServerManager().GetWhoisServer(q.Domain)
-	if err != nil {
-		return nil, fmt.Errorf("获取WHOIS服务器失败: %w", err)
-	}
-	result.Server = server
-
-	// 执行查询
-	rawResponse, err := executeQueryWithTimeout(q, server)
-	if err != nil {
-		return nil, err
-	}
-	result.RawResponse = rawResponse
-
-	// 解析WHOIS信息
-	info, err := whoisparser.Parse(rawResponse)
-	if err != nil {
-		return nil, fmt.Errorf("WHOIS信息解析失败: %w", err)
-	}
-	result.Info = &info
-
-	// 计算查询延迟
-	result.Latency = time.Since(startTime).Milliseconds()
-
-	// 验证结果
-	if q.ValidateResult {
-		result.ValidationResult = validateQueryResult(result, q.RequiredFields)
-		if !result.ValidationResult.Valid {
-			return result, fmt.Errorf("查询结果验证失败: %v", result.ValidationResult.Errors)
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// 检查上下文是否已取消
+		if ctx.Err() != nil {
+			return nil, NewWhoisError(ErrQueryTimeout, "查询被取消", ctx.Err())
 		}
+
+		if attempt > 0 {
+			logrus.Infof("重试WHOIS查询 [%s]，第%d次，等待%dms", q.Domain, attempt, interval)
+			select {
+			case <-ctx.Done():
+				return nil, NewWhoisError(ErrQueryTimeout, "查询被取消", ctx.Err())
+			case <-time.After(time.Duration(interval) * time.Millisecond):
+			}
+		}
+		result.RetryCount = attempt
+
+		// 获取WHOIS服务器
+		server, err := GetServerManager().GetWhoisServer(q.Domain)
+		if err != nil {
+			lastErr = NewWhoisError(ErrServerNotFound, "获取WHOIS服务器失败", err)
+			if !isRetryableError(lastErr) {
+				return nil, lastErr
+			}
+			continue
+		}
+		result.Server = server
+
+		// 执行查询
+		rawResponse, err := executeQueryWithTimeout(ctx, q, server)
+		if err != nil {
+			lastErr = err
+			if isRetryableError(err) {
+				continue
+			}
+			return nil, err
+		}
+		result.RawResponse = rawResponse
+
+		// 解析WHOIS信息
+		info, err := whoisparser.Parse(rawResponse)
+		if err != nil {
+			// 解析错误一般不可重试
+			return nil, NewWhoisError(ErrParseFailed, "WHOIS信息解析失败", err)
+		}
+		result.Info = &info
+
+		// 计算查询延迟
+		result.Latency = time.Since(startTime).Milliseconds()
+
+		// 验证结果
+		if q.ValidateResult {
+			result.ValidationResult = validateQueryResult(result, q.RequiredFields)
+			if !result.ValidationResult.Valid {
+				return result, NewWhoisError(ErrValidationFailed,
+					fmt.Sprintf("查询结果验证失败: %v", result.ValidationResult.Errors), nil)
+			}
+		}
+
+		return result, nil
 	}
 
-	return result, nil
+	return nil, NewWhoisError(ErrServerConnectFailed,
+		fmt.Sprintf("查询失败，已重试%d次", maxRetries), lastErr)
 }
 
 // executeQueryWithTimeout 带超时的查询执行
-func executeQueryWithTimeout(q *QueryOptions, server string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(q.Timeout)*time.Second)
-	defer cancel()
+func executeQueryWithTimeout(ctx context.Context, q *QueryOptions, server string) (string, error) {
+	// 如果上下文已有截止时间，使用它；否则应用QueryOptions.Timeout
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(q.Timeout)*time.Second)
+		defer cancel()
+	}
 
 	type queryResult struct {
 		response string
@@ -228,7 +340,7 @@ func executeQueryWithTimeout(q *QueryOptions, server string) (string, error) {
 	resultChan := make(chan queryResult, 1)
 	go func() {
 		if q.UseProxy {
-			response, err := DirectWhois(q.Domain)
+			response, err := DirectWhoisWithContext(ctx, q.Domain)
 			resultChan <- queryResult{response, err}
 		} else {
 			response, err := whois.Whois(q.Domain)
@@ -238,9 +350,12 @@ func executeQueryWithTimeout(q *QueryOptions, server string) (string, error) {
 
 	select {
 	case <-ctx.Done():
-		return "", fmt.Errorf("查询超时")
+		return "", NewWhoisError(ErrQueryTimeout, "查询超时", ctx.Err())
 	case result := <-resultChan:
-		return result.response, result.err
+		if result.err != nil {
+			return "", result.err
+		}
+		return result.response, nil
 	}
 }
 
@@ -319,6 +434,13 @@ func validateRequiredFields(info *whoisparser.WhoisInfo, fields []string) []stri
 	return missing
 }
 
+// SetProgressCallback 设置进度回调函数
+func (qa *QueryAggregator) SetProgressCallback(callback ProgressCallback) {
+	qa.mu.Lock()
+	defer qa.mu.Unlock()
+	qa.progressCallback = callback
+}
+
 // AddQuery 添加查询任务到队列
 func (qa *QueryAggregator) AddQuery(domain string, options *QueryOptions) {
 	qa.mu.Lock()
@@ -334,7 +456,18 @@ func (qa *QueryAggregator) AddQuery(domain string, options *QueryOptions) {
 }
 
 // ExecuteAll 执行所有查询任务
-func (qa *QueryAggregator) ExecuteAll() map[string]*QueryResult {
+func (qa *QueryAggregator) ExecuteAll() *BatchResult {
+	batchResult := &BatchResult{
+		Results: make(map[string]*QueryResult),
+		Errors:  make(map[string]error),
+	}
+
+	qa.mu.RLock()
+	total := qa.queue.Len()
+	callback := qa.progressCallback
+	qa.mu.RUnlock()
+
+	var completedVal int32
 	var wg sync.WaitGroup
 
 	for qa.queue.Len() > 0 {
@@ -347,20 +480,29 @@ func (qa *QueryAggregator) ExecuteAll() map[string]*QueryResult {
 			defer func() { <-qa.semaphore }() // 释放信号量
 
 			result, err := ExecuteQueryWithResult(t.Options)
-			if err != nil {
-				logrus.Errorf("查询失败 [%s]: %v", t.Domain, err)
-				return
-			}
 
 			qa.mu.Lock()
-			qa.results[t.Domain] = result
-			qa.updateStats(result)
+			qa.stats.TotalQueries++
+			currentCompleted := atomic.AddInt32(&completedVal, 1)
+			if err != nil {
+				batchResult.Errors[t.Domain] = err
+				qa.stats.FailedQueries++
+			} else {
+				batchResult.Results[t.Domain] = result
+				qa.stats.SuccessfulQueries++
+				qa.updateStats(result)
+			}
 			qa.mu.Unlock()
+
+			if callback != nil {
+				callback(int(currentCompleted), total, t.Domain, result, err)
+			}
 		}(task)
 	}
 
 	wg.Wait()
-	return qa.results
+	batchResult.Stats = qa.stats
+	return batchResult
 }
 
 // updateStats 更新统计信息
@@ -387,6 +529,16 @@ func (qa *QueryAggregator) GetStats() QueryStats {
 	qa.mu.RLock()
 	defer qa.mu.RUnlock()
 	return qa.stats
+}
+
+// PushTask 类型安全地添加查询任务到优先级队列
+func (pq *PriorityQueue) PushTask(task *QueryTask) {
+	heap.Push(pq, task)
+}
+
+// PopTask 类型安全地从优先级队列弹出查询任务
+func (pq *PriorityQueue) PopTask() *QueryTask {
+	return heap.Pop(pq).(*QueryTask)
 }
 
 // heap.Interface implementation for PriorityQueue

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"encoding/json"
+	"sort"
 	"sync"
 	"time"
 
@@ -333,27 +334,26 @@ func StartPerformanceLogging(interval time.Duration) {
 	go monitor.LogStats(interval)
 }
 
-// 计算百分位数
+// percentile 计算百分位数
 func percentile(values []int64, p int) int64 {
 	if len(values) == 0 {
 		return 0
 	}
 
-	// 冒泡排序，性能不高但代码简单，数据量小时足够
-	for i := 0; i < len(values); i++ {
-		for j := i + 1; j < len(values); j++ {
-			if values[i] > values[j] {
-				values[i], values[j] = values[j], values[i]
-			}
-		}
+	// 复制切片以避免修改输入
+	sorted := make([]int64, len(values))
+	copy(sorted, values)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+
+	index := int(float64(len(sorted)-1) * float64(p) / 100.0)
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+	if index < 0 {
+		index = 0
 	}
 
-	index := int(float64(len(values)) * float64(p) / 100.0)
-	if index >= len(values) {
-		index = len(values) - 1
-	}
-
-	return values[index]
+	return sorted[index]
 }
 
 // min 返回两个整数中的较小值

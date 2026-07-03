@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/cyberspacesec/whois-hacker/pkg/api"
-	"github.com/cyberspacesec/whois-hacker/pkg/metrics"
-	"github.com/cyberspacesec/whois-hacker/pkg/whois"
+	"github.com/cyberspacesec/whois-skills/pkg/api"
+	"github.com/cyberspacesec/whois-skills/pkg/metrics"
+	"github.com/cyberspacesec/whois-skills/pkg/whois"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,7 +50,8 @@ var (
 )
 
 func init() {
-	// 解析命令行参数
+	// 只注册flag定义，不做其他初始化
+	// 这样flag.Parse()可以在main()中调用，避免测试框架冲突
 	flag.StringVar(&configFile, "config", "config/config.yaml", "配置文件路径")
 	flag.StringVar(&httpHost, "host", "127.0.0.1", "HTTP服务监听地址")
 	flag.IntVar(&httpPort, "port", 8080, "HTTP服务监听端口")
@@ -66,21 +69,23 @@ func init() {
 	flag.Int64Var(&metricsInterval, "metrics-interval", 60, "监控采集间隔（秒）")
 	flag.BoolVar(&enableAlerts, "alerts", true, "是否启用告警")
 	flag.Int64Var(&alertsInterval, "alerts-interval", 60, "告警检查间隔（秒）")
-	flag.Parse()
-
-	// 配置日志
-	setupLogging()
 }
 
 func main() {
+	// 先解析命令行参数，再做其他初始化
+	flag.Parse()
+
+	// 加载YAML配置文件（如果存在），配置文件中的值作为默认值，
+	// 命令行参数优先级更高
+	loadConfigFromFile()
+
+	// 配置日志（在flag.Parse()之后，确保logLevel/logFormat已被设置）
+	setupLogging()
+
 	// 打印启动信息
 	logrus.Info("WhoisHacker 正在启动...")
 	logrus.Infof("配置文件: %s", configFile)
 	logrus.Infof("HTTP服务: %s:%d", httpHost, httpPort)
-
-	// 创建上下文
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// 初始化WHOIS服务器管理器
 	serverManager := whois.GetServerManager()
@@ -108,24 +113,55 @@ func main() {
 		setupAlerts()
 	}
 
-	// 启动HTTP服务
-	startHTTPServer()
+	// 创建API服务器（保存引用以实现优雅关闭）
+	apiServer := api.NewServer(httpHost, httpPort)
+	apiServer.EnableProxy = enableProxy
+	apiServer.EnableCache = enableCache
+	apiServer.EnableMetrics = enableMetrics
+	apiServer.EnableAlerts = enableAlerts
 
-	// 等待信号
+	// 创建HTTP Server用于优雅关闭
+	httpServer := &http.Server{
+		Addr:    fmt.Sprintf("%s:%d", httpHost, httpPort),
+		Handler: apiServer.CreateHandler(),
+	}
+
+	// 在goroutine中启动HTTP服务
+	go func() {
+		logrus.Infof("API服务正在启动，监听地址: %s", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logrus.Fatalf("API服务启动失败: %v", err)
+		}
+	}()
+
+	// 等待退出信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// 等待退出信号
 	sig := <-sigChan
-	logrus.Infof("收到信号: %v", sig)
+	logrus.Infof("收到信号: %v，开始优雅关闭...", sig)
 
-	// 优雅关闭
-	gracefulShutdown(ctx)
+	// 优雅关闭HTTP服务（给5秒时间完成正在处理的请求）
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logrus.Errorf("HTTP服务关闭失败: %v", err)
+	}
+
+	// 导出最后的指标
+	if enableMetrics {
+		collector := metrics.GetCollector()
+		if err := collector.ExportMetrics("data/metrics_final.json"); err != nil {
+			logrus.Errorf("导出最终指标失败: %v", err)
+		}
+	}
+
+	logrus.Info("服务已关闭")
 }
 
 // setupLogging 配置日志
 func setupLogging() {
-	// 设置日志级别
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		logrus.Warnf("解析日志级别失败: %v，使用默认级别: info", err)
@@ -133,7 +169,6 @@ func setupLogging() {
 	}
 	logrus.SetLevel(level)
 
-	// 设置日志格式
 	if logFormat == "json" {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 	} else {
@@ -146,9 +181,10 @@ func setupLogging() {
 // setupCache 配置缓存
 func setupCache() {
 	config := whois.CacheConfig{
-		Enabled: true,
-		Type:    cacheType,
-		TTL:     cacheTTL,
+		Enabled:         true,
+		Type:            cacheType,
+		TTL:             cacheTTL,
+		CleanupInterval: 300, // 5分钟清理一次
 	}
 
 	if cacheType == "redis" {
@@ -184,7 +220,7 @@ func setupCache() {
 	go func() {
 		ticker := time.NewTicker(time.Duration(config.CleanupInterval) * time.Second)
 		for range ticker.C {
-			cache.Clear()
+			cache.ClearExpired()
 		}
 	}()
 }
@@ -223,36 +259,75 @@ func setupAlerts() {
 	logrus.Infof("告警功能已启用，检查间隔: %ds", alertsInterval)
 }
 
-// startHTTPServer 启动HTTP服务
-func startHTTPServer() {
-	// 创建API服务器
-	server := api.NewServer(httpHost, httpPort)
-	server.EnableProxy = enableProxy
-	server.EnableCache = enableCache
-	server.EnableMetrics = enableMetrics
-	server.EnableAlerts = enableAlerts
-
-	// 启动服务器
-	if err := server.Start(); err != nil {
-		logrus.Fatalf("API服务启动失败: %v", err)
+// loadConfigFromFile 从YAML配置文件加载配置
+// 配置文件中的值会覆盖flag默认值，但命令行显式传入的参数优先级最高
+func loadConfigFromFile() {
+	if configFile == "" {
+		return
 	}
-}
 
-// gracefulShutdown 优雅关闭
-func gracefulShutdown(ctx context.Context) {
-	logrus.Info("正在关闭服务...")
-
-	// 等待所有请求处理完成
-	time.Sleep(time.Second * 5)
-
-	// 导出最后的指标
-	if enableMetrics {
-		collector := metrics.GetCollector()
-		if err := collector.ExportMetrics("data/metrics_final.json"); err != nil {
-			logrus.Errorf("导出最终指标失败: %v", err)
+	cfg, err := whois.LoadYAMLConfig(configFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logrus.Debugf("配置文件 %s 不存在，使用默认配置", configFile)
+			return
 		}
+		logrus.Warnf("加载配置文件失败: %v", err)
+		return
 	}
 
-	logrus.Info("服务已关闭")
-	os.Exit(0)
+	// 记录哪些flag被命令行显式设置
+	explicitFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		explicitFlags[f.Name] = true
+	})
+
+	// 只在命令行未显式设置时，才使用配置文件的值
+	if !explicitFlags["host"] && cfg.Server.Host != "" {
+		httpHost = cfg.Server.Host
+	}
+	if !explicitFlags["port"] && cfg.Server.Port > 0 {
+		httpPort = cfg.Server.Port
+	}
+	if !explicitFlags["log-level"] && cfg.Log.Level != "" {
+		logLevel = cfg.Log.Level
+	}
+	if !explicitFlags["log-format"] && cfg.Log.Format != "" {
+		logFormat = cfg.Log.Format
+	}
+	if !explicitFlags["cache"] {
+		enableCache = cfg.Cache.Enabled
+	}
+	if !explicitFlags["cache-type"] && cfg.Cache.Type != "" {
+		cacheType = cfg.Cache.Type
+	}
+	if !explicitFlags["cache-ttl"] && cfg.Cache.TTL > 0 {
+		cacheTTL = cfg.Cache.TTL
+	}
+	if !explicitFlags["cache-warmup"] {
+		cacheWarmup = cfg.Cache.Warmup
+	}
+	if !explicitFlags["warmup-file"] && cfg.Cache.WarmupFile != "" {
+		warmupFile = cfg.Cache.WarmupFile
+	}
+	if !explicitFlags["proxy"] {
+		enableProxy = cfg.Proxy.Enabled
+	}
+	if !explicitFlags["proxy-file"] && cfg.Proxy.File != "" {
+		proxyFile = cfg.Proxy.File
+	}
+	if !explicitFlags["metrics"] {
+		enableMetrics = cfg.Metrics.Enabled
+	}
+	if !explicitFlags["metrics-interval"] && cfg.Metrics.Interval > 0 {
+		metricsInterval = cfg.Metrics.Interval
+	}
+	if !explicitFlags["alerts"] {
+		enableAlerts = cfg.Alerts.Enabled
+	}
+	if !explicitFlags["alerts-interval"] && cfg.Alerts.Interval > 0 {
+		alertsInterval = cfg.Alerts.Interval
+	}
+
+	logrus.Infof("已从 %s 加载配置", configFile)
 }

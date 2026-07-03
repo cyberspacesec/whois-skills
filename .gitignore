@@ -76,3 +76,12 @@ secrets.yml
 templates-custom/
 tmp/
 vendor/
+
+# Website docs (VitePress)
+website/node_modules/
+website/.vitepress/dist/
+website/.vitepress/cache/
+website/package-lock.json
+
+# Legacy static website (replaced by VitePress)
+website/legacy/

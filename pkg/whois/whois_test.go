@@ -103,7 +103,7 @@ func TestCheckError(t *testing.T) {
 			// 创建一个包含特定错误消息的错误对象
 			mockErr := &mockErrorWithMessage{message: tt.errorMessage}
 			wrapper := CheckError(mockErr)
-			assert.Equal(t, tt.expectedType, wrapper.ErrorType)
+			assert.Equal(t, tt.expectedType, wrapper.Type)
 		})
 	}
 }

@@ -1,0 +1,9 @@
+[
+  {
+    "id": "test-id",
+    "key": "test-key",
+    "permissions": null,
+    "rate_limit": 120,
+    "created_at": "0001-01-01T00:00:00Z"
+  }
+]

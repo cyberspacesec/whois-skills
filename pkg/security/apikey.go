@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,9 @@ type APIKeyManager struct {
 
 	// API密钥映射表
 	keys map[string]*APIKey
+
+	// 配置文件路径
+	configPath string
 }
 
 var (
@@ -164,13 +169,68 @@ func (m *APIKeyManager) GenerateAPIKey(description string, permissions []string,
 
 // LoadConfig 从配置文件加载API密钥
 func (m *APIKeyManager) LoadConfig(configPath string) error {
-	// 实现从配置文件加载API密钥的逻辑
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("配置文件不存在: %s", configPath)
+		}
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	var keys []*APIKey
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return fmt.Errorf("解析API密钥配置失败: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.configPath = configPath
+	m.keys = make(map[string]*APIKey, len(keys))
+	for _, key := range keys {
+		m.keys[key.Key] = key
+	}
+
+	logrus.Infof("已加载 %d 个API密钥", len(keys))
 	return nil
 }
 
 // SaveConfig 保存API密钥到配置文件
 func (m *APIKeyManager) SaveConfig() error {
-	// 实现保存API密钥到配置文件的逻辑
+	m.mu.RLock()
+	keys := make([]*APIKey, 0, len(m.keys))
+	for _, key := range m.keys {
+		keys = append(keys, key)
+	}
+	configPath := m.configPath
+	m.mu.RUnlock()
+
+	if configPath == "" {
+		configPath = "config/apikeys.json"
+		m.mu.Lock()
+		m.configPath = configPath
+		m.mu.Unlock()
+	}
+
+	data, err := json.MarshalIndent(keys, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化API密钥失败: %w", err)
+	}
+
+	// 确保目录存在
+	dir := os.ExpandEnv(filepath.Dir(configPath))
+	if !strings.ContainsRune(os.ExpandEnv(configPath), os.PathSeparator) {
+		dir = "config"
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return fmt.Errorf("保存API密钥配置失败: %w", err)
+	}
+
+	logrus.Infof("已保存 %d 个API密钥到 %s", len(keys), configPath)
 	return nil
 }
 
@@ -198,82 +258,76 @@ func (m *APIKeyManager) ListAPIKeys() []*APIKey {
 // DisableAPIKey 禁用API密钥
 func (m *APIKeyManager) DisableAPIKey(key string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	apiKey, exists := m.keys[key]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	apiKey.Permissions = []string{}
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // EnableAPIKey 启用API密钥
 func (m *APIKeyManager) EnableAPIKey(key string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	apiKey, exists := m.keys[key]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	apiKey.Permissions = []string{"admin"}
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // DeleteAPIKey 删除API密钥
 func (m *APIKeyManager) DeleteAPIKey(key string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if _, exists := m.keys[key]; !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	delete(m.keys, key)
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // SetKeyExpiration 设置API密钥过期时间
 func (m *APIKeyManager) SetKeyExpiration(key string, expiresAt time.Time) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	apiKey, exists := m.keys[key]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	apiKey.ExpiresAt = &expiresAt
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // UpdateKeyPermissions 更新API密钥权限
 func (m *APIKeyManager) UpdateKeyPermissions(key string, permissions []string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	apiKey, exists := m.keys[key]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	apiKey.Permissions = permissions
+	m.mu.Unlock()
 	return m.SaveConfig()
 }
 
 // UpdateKeyRateLimit 更新API密钥速率限制
 func (m *APIKeyManager) UpdateKeyRateLimit(key string, rateLimit int) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	apiKey, exists := m.keys[key]
 	if !exists {
+		m.mu.Unlock()
 		return fmt.Errorf("API密钥不存在")
 	}
-
 	apiKey.RateLimit = rateLimit
+	m.mu.Unlock()
 	return m.SaveConfig()
 }

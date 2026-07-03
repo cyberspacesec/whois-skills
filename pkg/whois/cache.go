@@ -290,10 +290,32 @@ func (c *LocalCache) Clear() {
 	c.stats.mu.Unlock()
 }
 
+// clearExpired 清理过期的缓存条目
+func (c *LocalCache) clearExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	for domain, entry := range c.cache {
+		if now.After(entry.ExpiresAt) {
+			delete(c.cache, domain)
+		}
+	}
+
+	c.stats.mu.Lock()
+	c.stats.Entries = int64(len(c.cache))
+	c.stats.mu.Unlock()
+}
+
 // GetStats 获取缓存统计信息
 func (c *LocalCache) GetStats() map[string]interface{} {
 	c.stats.mu.RLock()
 	defer c.stats.mu.RUnlock()
+
+	var hitRate float64
+	if c.stats.Requests > 0 {
+		hitRate = float64(c.stats.Hits) / float64(c.stats.Requests) * 100
+	}
 
 	return map[string]interface{}{
 		"type":     "local",
@@ -302,7 +324,7 @@ func (c *LocalCache) GetStats() map[string]interface{} {
 		"misses":   c.stats.Misses,
 		"expired":  c.stats.Expired,
 		"requests": c.stats.Requests,
-		"hit_rate": float64(c.stats.Hits) / float64(c.stats.Requests) * 100,
+		"hit_rate": hitRate,
 	}
 }
 
@@ -406,13 +428,18 @@ func (c *RedisCache) GetStats() map[string]interface{} {
 	c.stats.mu.RLock()
 	defer c.stats.mu.RUnlock()
 
+	var hitRate float64
+	if c.stats.Requests > 0 {
+		hitRate = float64(c.stats.Hits) / float64(c.stats.Requests) * 100
+	}
+
 	stats := map[string]interface{}{
 		"type":     "redis",
 		"hits":     c.stats.Hits,
 		"misses":   c.stats.Misses,
 		"expired":  c.stats.Expired,
 		"requests": c.stats.Requests,
-		"hit_rate": float64(c.stats.Hits) / float64(c.stats.Requests) * 100,
+		"hit_rate": hitRate,
 	}
 
 	// 获取Redis信息
@@ -540,6 +567,17 @@ func (c *WhoisCache) Clear() {
 		return
 	}
 	c.provider.Clear()
+}
+
+// ClearExpired 清理过期的缓存条目
+func (c *WhoisCache) ClearExpired() {
+	if !c.config.Enabled {
+		return
+	}
+	if lp, ok := c.provider.(*LocalCache); ok {
+		lp.clearExpired()
+	}
+	// Redis通过TTL自动过期，无需手动清理
 }
 
 // GetStats 获取缓存统计信息

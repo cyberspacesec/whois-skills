@@ -1,9 +1,10 @@
 package whois
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	domain_util "github.com/cyberspacesec/go-domain-util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -282,15 +284,76 @@ func extractTLD(domain string) string {
 	if idx := strings.Index(domain, "/"); idx > 0 {
 		domain = domain[:idx]
 	}
+	domain = strings.Trim(domain, ".")
 
-	// 分割域名部分
+	// 使用go-domain-util进行准确的TLD提取（使用Public Suffix List）
+	fldDomain, err := domain_util.FldDomain(domain)
+	if err == nil && fldDomain != "" {
+		// 从first-level domain中提取TLD
+		parts := strings.Split(fldDomain, ".")
+		if len(parts) >= 2 {
+			return strings.ToLower(strings.Join(parts[1:], "."))
+		}
+		return strings.ToLower(parts[0])
+	}
+
+	// 回退到简单的最后一部分提取
 	parts := strings.Split(domain, ".")
 	if len(parts) < 2 {
 		return ""
 	}
-
-	// 返回最后一部分作为TLD
 	return strings.ToLower(parts[len(parts)-1])
+}
+
+// ExtractTLD 从域名中提取顶级域名（公开API）
+func ExtractTLD(domain string) (string, error) {
+	tld := extractTLD(domain)
+	if tld == "" {
+		return "", fmt.Errorf("无效的域名或无法提取TLD: %s", domain)
+	}
+	return tld, nil
+}
+
+// ExtractEffectiveTLD 使用Public Suffix List提取有效的顶级域名
+func ExtractEffectiveTLD(domain string) (string, error) {
+	hostEntry, err := domain_util.NewHostEntry(domain)
+	if err != nil {
+		return "", fmt.Errorf("解析域名失败: %w", err)
+	}
+	return hostEntry.Tld, nil
+}
+
+// DomainInfo 域名解析信息
+type DomainInfo struct {
+	// 完整域名
+	FullDomain string `json:"full_domain"`
+
+	// 顶级域名
+	TLD string `json:"tld"`
+
+	// 域名（SLD + TLD）
+	Domain string `json:"domain"`
+
+	// 子域名
+	SubDomain string `json:"sub_domain"`
+
+	// 通配符基础域名
+	WildcardBase string `json:"wildcard_base"`
+}
+
+// ParseDomain 解析域名为结构化信息
+func ParseDomain(domain string) (*DomainInfo, error) {
+	hostEntry, err := domain_util.NewHostEntry(domain)
+	if err != nil {
+		return nil, fmt.Errorf("解析域名失败: %w", err)
+	}
+	return &DomainInfo{
+		FullDomain:   hostEntry.Host,
+		TLD:          hostEntry.Tld,
+		Domain:       hostEntry.Domain,
+		SubDomain:    hostEntry.SubName,
+		WildcardBase: hostEntry.WildcardBase,
+	}, nil
 }
 
 // UpdateServer 更新或添加单个WHOIS服务器映射
@@ -323,7 +386,7 @@ func (m *WhoisServerManager) SetDefaultServer(server string) {
 
 // LoadFromFile 从配置文件加载WHOIS服务器列表
 func (m *WhoisServerManager) LoadFromFile(filePath string) error {
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("无法读取WHOIS服务器配置文件: %w", err)
 	}
@@ -355,7 +418,7 @@ func (m *WhoisServerManager) SaveToFile(filePath string) error {
 		return fmt.Errorf("创建配置目录失败: %w", err)
 	}
 
-	if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return fmt.Errorf("写入WHOIS服务器配置文件失败: %w", err)
 	}
 
@@ -553,5 +616,61 @@ func InitWhoisServerManager(configPath string) error {
 		}
 	}
 
+	return nil
+}
+
+// DiscoverWhoisServer 从IANA发现TLD的WHOIS服务器
+func (m *WhoisServerManager) DiscoverWhoisServer(tld string) (string, error) {
+	conn, err := net.DialTimeout("tcp", "whois.iana.org:43", m.healthCheckTimeout)
+	if err != nil {
+		return "", fmt.Errorf("连接IANA服务器失败: %w", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write([]byte(tld + "\r\n"))
+	if err != nil {
+		return "", fmt.Errorf("发送IANA查询失败: %w", err)
+	}
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, conn)
+	if err != nil {
+		return "", fmt.Errorf("读取IANA响应失败: %w", err)
+	}
+
+	server := extractReferralServer(buf.String())
+	if server == "" {
+		return "", fmt.Errorf("未找到%s的WHOIS服务器", tld)
+	}
+
+	// 缓存发现的服务器
+	m.UpdateServer(tld, server)
+	return server, nil
+}
+
+// RefreshServerList 自动刷新WHOIS服务器列表
+func (m *WhoisServerManager) RefreshServerList() error {
+	m.mu.RLock()
+	tlds := make([]string, 0, len(m.servers))
+	for tld := range m.servers {
+		tlds = append(tlds, tld)
+	}
+	m.mu.RUnlock()
+
+	var lastErr error
+	refreshed := 0
+	for _, tld := range tlds {
+		if _, err := m.DiscoverWhoisServer(tld); err != nil {
+			lastErr = err
+			continue
+		}
+		refreshed++
+	}
+
+	logrus.Infof("WHOIS服务器列表刷新完成: %d/%d 成功", refreshed, len(tlds))
+
+	if lastErr != nil && refreshed == 0 {
+		return lastErr
+	}
 	return nil
 }

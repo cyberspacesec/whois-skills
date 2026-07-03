@@ -1,0 +1,143 @@
+/* =========================================================
+   Whois Hacker 文档站自定义样式
+   ========================================================= */
+
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #41b883 30%, #2b7a4b);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #42d392 50%, #647eff 50%);
+  --vp-home-hero-image-filter: blur(44px);
+
+  --vp-button-brand-bg: #2b7a4b;
+  --vp-button-brand-hover-bg: #41b883;
+  --vp-button-brand-border: transparent;
+
+  /* 自定义徽章颜色 */
+  --badge-info: #3eaf7c;
+  --badge-warn: #e6a23c;
+  --badge-danger: #f56c6c;
+  --badge-tip: #647eff;
+}
+
+.dark {
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #14543a 50%, #2c4a8a 50%);
+}
+
+/* ---------------------------------------------------------
+   徽章 Badge 组件样式
+   用法：::: badge GET /api/whois :::
+   --------------------------------------------------------- */
+.vp-badge,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+.badge-get { background: rgba(62, 175, 124, 0.15); color: #3eaf7c; border: 1px solid rgba(62, 175, 124, 0.3); }
+.badge-post { background: rgba(100, 126, 255, 0.15); color: #647eff; border: 1px solid rgba(100, 126, 255, 0.3); }
+.badge-info { background: rgba(100, 126, 255, 0.15); color: #647eff; border: 1px solid rgba(100, 126, 255, 0.3); }
+.badge-warn { background: rgba(230, 162, 60, 0.15); color: #e6a23c; border: 1px solid rgba(230, 162, 60, 0.3); }
+.badge-danger { background: rgba(245, 108, 108, 0.15); color: #f56c6c; border: 1px solid rgba(245, 108, 108, 0.3); }
+.badge-tip { background: rgba(62, 175, 124, 0.15); color: #3eaf7c; border: 1px solid rgba(62, 175, 124, 0.3); }
+
+/* ---------------------------------------------------------
+   自定义容器（带图标）
+   --------------------------------------------------------- */
+.vp-doc .custom-block {
+  border-radius: 8px;
+}
+.vp-doc .custom-block .custom-block-title {
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------
+   功能卡片网格
+   用法：::: feature-grid :::
+   --------------------------------------------------------- */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.feature-card {
+  padding: 18px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  background: var(--vp-c-bg-soft);
+  transition: all 0.25s ease;
+}
+.feature-card:hover {
+  border-color: var(--vp-c-brand);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.feature-card .feature-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  display: block;
+}
+.feature-card .feature-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 6px;
+  color: var(--vp-c-text-1);
+}
+.feature-card .feature-desc {
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------
+   端点表格美化
+   --------------------------------------------------------- */
+.vp-doc table {
+  display: table;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------
+   首页 Hero 区域动画
+   --------------------------------------------------------- */
+.VPHero .image-bg {
+  opacity: 0.8;
+}
+
+/* 图标列表 */
+.icon-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.icon-list .icon-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  font-size: 13px;
+}
+
+/* 状态标签 */
+.status-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-tag.stable { background: rgba(62,175,124,0.15); color: #3eaf7c; }
+.status-tag.beta { background: rgba(230,162,60,0.15); color: #e6a23c; }
+.status-tag.experimental { background: rgba(245,108,108,0.15); color: #f56c6c; }

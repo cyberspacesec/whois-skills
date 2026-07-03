@@ -54,8 +54,8 @@ clean:
 # 构建Docker镜像
 docker:
 	@echo "构建Docker镜像..."
-	docker build -t cyberspacesec/whois-hacker:$(VERSION) .
-	docker tag cyberspacesec/whois-hacker:$(VERSION) cyberspacesec/whois-hacker:latest
+	docker build -t cyberspacesec/whois-skills:$(VERSION) .
+	docker tag cyberspacesec/whois-skills:$(VERSION) cyberspacesec/whois-skills:latest
 	@echo "Docker镜像构建完成"
 
 # 构建多平台Docker镜像
@@ -63,8 +63,8 @@ docker-multi:
 	@echo "构建多平台Docker镜像 (需要 Docker BuildX)..."
 	docker buildx create --use --name=whois-builder || true
 	docker buildx build --platform linux/amd64,linux/arm64 \
-		-t cyberspacesec/whois-hacker:$(VERSION) \
-		-t cyberspacesec/whois-hacker:latest \
+		-t cyberspacesec/whois-skills:$(VERSION) \
+		-t cyberspacesec/whois-skills:latest \
 		--push .
 	@echo "多平台Docker镜像构建完成"
 

@@ -1,10 +1,11 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/cyberspacesec/whois-hacker/pkg/whois"
+	"github.com/cyberspacesec/whois-skills/pkg/whois"
 	"github.com/google/uuid"
 	whoisparser "github.com/likexian/whois-parser"
 )
@@ -20,6 +21,10 @@ func NewController() *Controller {
 		store: NewRequestStore(),
 	}
 }
+
+// ============================================================
+// MCP 任务管理 (原有功能)
+// ============================================================
 
 // TaskInput 表示创建任务的输入
 type TaskInput struct {
@@ -540,7 +545,7 @@ type DeleteTaskInput struct {
 
 // DeleteTaskOutput 表示删除任务的输出
 type DeleteTaskOutput struct {
-	RequestID string `json:"requestId"`
+	RequestID string `json:"request_id"`
 	Message   string `json:"message"`
 	Progress  string `json:"progress"`
 }
@@ -646,10 +651,400 @@ func (c *Controller) generateProgressInfo(request *Request) string {
 	return fmt.Sprintf("进度: %d/%d 完成, %d/%d 已批准", done, total, approved, total)
 }
 
+// ============================================================
+// WHOIS 查询能力 (新增)
+// ============================================================
+
+// WhoisQueryInput 域名WHOIS查询输入
+type WhoisQueryInput struct {
+	Domain         string   `json:"domain"`
+	UseProxy       bool     `json:"use_proxy,omitempty"`
+	Timeout        int      `json:"timeout,omitempty"`
+	MaxRetries     int      `json:"max_retries,omitempty"`
+	ValidateResult bool     `json:"validate_result,omitempty"`
+	RequiredFields []string `json:"required_fields,omitempty"`
+}
+
+// WhoisQueryOutput 域名WHOIS查询输出
+type WhoisQueryOutput struct {
+	Info      *whoisparser.WhoisInfo `json:"info"`
+	Raw       string                 `json:"raw_response,omitempty"`
+	Server    string                 `json:"server,omitempty"`
+	Latency   int64                  `json:"latency,omitempty"`
+	Retries   int                    `json:"retry_count,omitempty"`
+	Valid     bool                   `json:"valid,omitempty"`
+	Errors    []string               `json:"validation_errors,omitempty"`
+}
+
 // ExecuteWhoisQuery 执行WHOIS查询
 func (c *Controller) ExecuteWhoisQuery(domain string) (*whoisparser.WhoisInfo, error) {
 	queryOpts := &whois.Query{
 		Domain: domain,
 	}
 	return whois.Execute(queryOpts)
+}
+
+// ExecuteWhoisQueryFull 执行完整WHOIS查询（新版API，返回更多信息）
+func (c *Controller) ExecuteWhoisQueryFull(ctx context.Context, input WhoisQueryInput) (*WhoisQueryOutput, error) {
+	if input.Domain == "" {
+		return nil, fmt.Errorf("域名不能为空")
+	}
+
+	if input.Timeout <= 0 {
+		input.Timeout = 10
+	}
+
+	result, err := whois.ExecuteQueryWithResultContext(ctx, &whois.QueryOptions{
+		Domain:         input.Domain,
+		UseProxy:       input.UseProxy,
+		Timeout:        input.Timeout,
+		MaxRetries:     input.MaxRetries,
+		ValidateResult: input.ValidateResult,
+		RequiredFields: input.RequiredFields,
+		Priority:       1,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	output := &WhoisQueryOutput{
+		Info:    result.Info,
+		Raw:     result.RawResponse,
+		Server:  result.Server,
+		Latency: result.Latency,
+		Retries: result.RetryCount,
+	}
+
+	if result.ValidationResult != nil {
+		output.Valid = result.ValidationResult.Valid
+		output.Errors = result.ValidationResult.Errors
+	}
+
+	return output, nil
+}
+
+// IPQueryInput IP WHOIS查询输入
+type IPQueryInput struct {
+	IP       string `json:"ip"`
+	Timeout  int    `json:"timeout,omitempty"`
+	UseProxy bool   `json:"use_proxy,omitempty"`
+}
+
+// IPQueryOutput IP WHOIS查询输出
+type IPQueryOutput struct {
+	IP          string                 `json:"ip"`
+	RawResponse string                 `json:"raw_response"`
+	Server      string                 `json:"server"`
+	Latency     int64                  `json:"latency"`
+	Info        *whoisparser.WhoisInfo `json:"info,omitempty"`
+}
+
+// ExecuteIPWhoisQuery 执行IP WHOIS查询
+func (c *Controller) ExecuteIPWhoisQuery(ctx context.Context, input IPQueryInput) (*IPQueryOutput, error) {
+	if input.IP == "" {
+		return nil, fmt.Errorf("IP地址不能为空")
+	}
+
+	result, err := whois.QueryIPWithContext(ctx, &whois.IPWhoisOptions{
+		IP:       input.IP,
+		Timeout:  input.Timeout,
+		UseProxy: input.UseProxy,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &IPQueryOutput{
+		IP:          result.IP,
+		RawResponse: result.RawResponse,
+		Server:      result.Server,
+		Latency:     result.Latency,
+		Info:        result.Info,
+	}, nil
+}
+
+// ASNQueryInput ASN查询输入
+type ASNQueryInput struct {
+	ASN             int    `json:"asn"`
+	Source          string `json:"source,omitempty"` // radb, rdap, all
+	Timeout         int    `json:"timeout,omitempty"`
+	IncludePrefixes bool   `json:"include_prefixes,omitempty"`
+	IncludeBGP      bool   `json:"include_bgp,omitempty"`
+}
+
+// ASNQueryOutput ASN查询输出
+type ASNQueryOutput struct {
+	ASN          int      `json:"asn"`
+	Name         string   `json:"name,omitempty"`
+	Organization string   `json:"organization,omitempty"`
+	Country      string   `json:"country,omitempty"`
+	RIR          string   `json:"rir,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	IPv4Prefixes []string `json:"ipv4_prefixes,omitempty"`
+	IPv6Prefixes []string `json:"ipv6_prefixes,omitempty"`
+}
+
+// ExecuteASNQuery 执行ASN查询
+func (c *Controller) ExecuteASNQuery(ctx context.Context, input ASNQueryInput) (*ASNQueryOutput, error) {
+	if input.ASN <= 0 {
+		return nil, fmt.Errorf("ASN必须为正整数")
+	}
+
+	source := whois.ASNSourceAll
+	switch input.Source {
+	case "radb":
+		source = whois.ASNSourceRADB
+	case "rdap":
+		source = whois.ASNSourceRDAP
+	}
+
+	result, err := whois.QueryASNWithContext(ctx, &whois.ASNQueryOptions{
+		ASN:             input.ASN,
+		Source:          source,
+		Timeout:         input.Timeout,
+		IncludePrefixes: input.IncludePrefixes,
+		IncludeBGP:      input.IncludeBGP,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ASNQueryOutput{
+		ASN:          result.ASN,
+		Name:         result.Name,
+		Organization: result.Organization,
+		Country:      result.Country,
+		RIR:          result.RIR,
+		Description:  result.Description,
+		IPv4Prefixes: result.IPv4Prefixes,
+		IPv6Prefixes: result.IPv6Prefixes,
+	}, nil
+}
+
+// RDAPQueryInput RDAP查询输入
+type RDAPQueryInput struct {
+	Type    string `json:"type"` // domain, ip, asn
+	Target  string `json:"target"`
+	Timeout int    `json:"timeout,omitempty"`
+}
+
+// RDAPQueryOutput RDAP查询输出
+type RDAPQueryOutput struct {
+	Type    string      `json:"type"`
+	Target  string      `json:"target"`
+	Result  interface{} `json:"result"`
+	Server  string      `json:"server,omitempty"`
+}
+
+// ExecuteRDAPQuery 执行RDAP查询（统一入口）
+func (c *Controller) ExecuteRDAPQuery(ctx context.Context, input RDAPQueryInput) (*RDAPQueryOutput, error) {
+	if input.Type == "" || input.Target == "" {
+		return nil, fmt.Errorf("type和target不能为空")
+	}
+
+	opts := &whois.RDAPQueryOptions{Timeout: input.Timeout}
+
+	switch input.Type {
+	case "domain":
+		opts.Domain = input.Target
+		result, err := whois.QueryRDAPWithContext(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		return &RDAPQueryOutput{
+			Type:   "domain",
+			Target: input.Target,
+			Result: result,
+			Server: result.Server,
+		}, nil
+
+	case "ip":
+		opts.IP = input.Target
+		result, err := whois.QueryRDAP_IPWithContext(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		return &RDAPQueryOutput{
+			Type:   "ip",
+			Target: input.Target,
+			Result: result,
+			Server: result.Server,
+		}, nil
+
+	case "asn":
+		opts.ASN = input.Target
+		result, err := whois.QueryRDAP_ASNWithContext(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		return &RDAPQueryOutput{
+			Type:   "asn",
+			Target: input.Target,
+			Result: result,
+			Server: result.Server,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("不支持的type: %s，支持: domain, ip, asn", input.Type)
+	}
+}
+
+// AvailabilityInput 域名可用性检查输入
+type AvailabilityInput struct {
+	Domain string `json:"domain"`
+}
+
+// AvailabilityOutput 域名可用性检查输出
+type AvailabilityOutput struct {
+	Domain    string `json:"domain"`
+	Available bool   `json:"available"`
+	Status    string `json:"status"`
+	Message   string `json:"message,omitempty"`
+}
+
+// CheckAvailability 检查域名可用性
+func (c *Controller) CheckAvailability(ctx context.Context, input AvailabilityInput) (*AvailabilityOutput, error) {
+	if input.Domain == "" {
+		return nil, fmt.Errorf("域名不能为空")
+	}
+
+	result, err := whois.CheckDomainAvailabilityWithContext(ctx, input.Domain)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AvailabilityOutput{
+		Domain:    result.Domain,
+		Available: result.Available,
+		Status:    result.Status,
+		Message:   result.Message,
+	}, nil
+}
+
+// WhoisCompareInput WHOIS对比输入
+type WhoisCompareInput struct {
+	Domain1 string `json:"domain1"`
+	Domain2 string `json:"domain2"`
+}
+
+// WhoisCompareOutput WHOIS对比输出
+type WhoisCompareOutput struct {
+	Domain1 string              `json:"domain1"`
+	Domain2 string              `json:"domain2"`
+	Changes []*whois.WhoisChange `json:"changes"`
+	Count   int                 `json:"count"`
+}
+
+// CompareWhoisInfo 对比两个域名的WHOIS信息
+func (c *Controller) CompareWhoisInfo(ctx context.Context, input WhoisCompareInput) (*WhoisCompareOutput, error) {
+	if input.Domain1 == "" || input.Domain2 == "" {
+		return nil, fmt.Errorf("两个域名都不能为空")
+	}
+
+	info1, err := whois.ExecuteQueryWithContext(ctx, &whois.QueryOptions{Domain: input.Domain1})
+	if err != nil {
+		return nil, fmt.Errorf("查询 %s 失败: %w", input.Domain1, err)
+	}
+
+	info2, err := whois.ExecuteQueryWithContext(ctx, &whois.QueryOptions{Domain: input.Domain2})
+	if err != nil {
+		return nil, fmt.Errorf("查询 %s 失败: %w", input.Domain2, err)
+	}
+
+	changes := whois.CompareWhois(info1, info2)
+
+	return &WhoisCompareOutput{
+		Domain1: input.Domain1,
+		Domain2: input.Domain2,
+		Changes: changes,
+		Count:   len(changes),
+	}, nil
+}
+
+// QualityInput 质量评估输入
+type QualityInput struct {
+	Domain string `json:"domain"`
+}
+
+// QualityOutput 质量评估输出
+type QualityOutput struct {
+	Domain       string `json:"domain"`
+	TotalScore   int    `json:"total_score"`
+	Completeness int    `json:"completeness"`
+	Timeliness   int    `json:"timeliness"`
+	Reliability  int    `json:"reliability"`
+	Level        string `json:"level"`
+}
+
+// AssessWhoisQuality 评估WHOIS数据质量
+func (c *Controller) AssessWhoisQuality(ctx context.Context, input QualityInput) (*QualityOutput, error) {
+	if input.Domain == "" {
+		return nil, fmt.Errorf("域名不能为空")
+	}
+
+	info, err := whois.ExecuteQueryWithContext(ctx, &whois.QueryOptions{Domain: input.Domain})
+	if err != nil {
+		return nil, fmt.Errorf("查询失败: %w", err)
+	}
+
+	score := whois.AssessQuality(info)
+
+	return &QualityOutput{
+		Domain:       input.Domain,
+		TotalScore:   score.Total,
+		Completeness: score.Completeness,
+		Timeliness:   score.Timeliness,
+		Reliability:  score.Reliability,
+		Level:        string(score.Level),
+	}, nil
+}
+
+// NormalizeInput 域名规范化输入
+type NormalizeInput struct {
+	Domain string `json:"domain"`
+	Action string `json:"action,omitempty"` // normalize, to_punycode, to_unicode
+}
+
+// NormalizeOutput 域名规范化输出
+type NormalizeOutput struct {
+	Original   string `json:"original"`
+	Result     string `json:"result"`
+	IsIDN      bool   `json:"is_idn"`
+	Action     string `json:"action"`
+}
+
+// NormalizeDomainName 规范化域名
+func (c *Controller) NormalizeDomainName(input NormalizeInput) (*NormalizeOutput, error) {
+	if input.Domain == "" {
+		return nil, fmt.Errorf("域名不能为空")
+	}
+
+	if input.Action == "" {
+		input.Action = "normalize"
+	}
+
+	var result string
+	var err error
+
+	switch input.Action {
+	case "normalize":
+		result, err = whois.NormalizeDomain(input.Domain)
+	case "to_punycode":
+		result, err = whois.UnicodeToPunycode(input.Domain)
+	case "to_unicode":
+		result, err = whois.PunycodeToUnicode(input.Domain)
+	default:
+		return nil, fmt.Errorf("不支持的action: %s，支持: normalize, to_punycode, to_unicode", input.Action)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &NormalizeOutput{
+		Original: input.Domain,
+		Result:   result,
+		IsIDN:    whois.IsIDN(input.Domain),
+		Action:   input.Action,
+	}, nil
 }

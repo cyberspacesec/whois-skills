@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"flag"
+	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/cyberspacesec/whois-skills/pkg/api"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -125,30 +127,62 @@ func TestSetupLogging(t *testing.T) {
 	}
 }
 
-func TestGracefulShutdown(t *testing.T) {
-	// 保存原始配置和输出
-	originalEnableMetrics := enableMetrics
-	originalOutput := logrus.StandardLogger().Out
-	defer func() {
-		enableMetrics = originalEnableMetrics
-		logrus.SetOutput(originalOutput)
+func TestHTTPServerGracefulShutdown(t *testing.T) {
+	// 测试 http.Server.Shutdown 机制
+	apiServer := api.NewServer("127.0.0.1", 0) // 端口0让系统自动分配
+	apiServer.EnableCache = false
+	apiServer.EnableMetrics = false
+	apiServer.EnableAlerts = false
+	apiServer.EnableProxy = false
+
+	httpServer := &http.Server{
+		Addr:    "127.0.0.1:0",
+		Handler: apiServer.CreateHandler(),
+	}
+
+	// 在goroutine中启动HTTP服务
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
 	}()
 
-	// 创建一个测试上下文
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	// 给服务一点启动时间
+	time.Sleep(50 * time.Millisecond)
 
-	// 捕获日志输出
-	var buf bytes.Buffer
-	logrus.SetOutput(&buf)
+	// 优雅关闭
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer shutdownCancel()
 
-	// 模拟优雅关闭
-	enableMetrics = true
-	gracefulShutdown(ctx)
+	err := httpServer.Shutdown(shutdownCtx)
+	assert.NoError(t, err, "HTTP服务应能优雅关闭")
 
-	// 检查日志输出
-	output := buf.String()
-	assert.Contains(t, output, "正在关闭服务")
+	// 等待goroutine结束，验证服务确实停止了
+	select {
+	case e := <-serverErr:
+		assert.Nil(t, e, "服务不应返回非ErrServerClosed错误")
+	case <-time.After(3 * time.Second):
+		t.Fatal("服务关闭超时")
+	}
+}
+
+func TestSetupProxy(t *testing.T) {
+	// 保存原始配置
+	originalEnableProxy := enableProxy
+	originalProxyFile := proxyFile
+	defer func() {
+		enableProxy = originalEnableProxy
+		proxyFile = originalProxyFile
+	}()
+
+	// 测试不存在的代理文件
+	enableProxy = true
+	proxyFile = "nonexistent_proxies.json"
+
+	// setupProxy不应panic，只记录错误
+	assert.NotPanics(t, setupProxy)
 }
 
 func TestSetupCache(t *testing.T) {
