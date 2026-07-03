@@ -59,6 +59,34 @@ type PerformanceMonitor struct {
 
 ## 🔧 核心函数
 
+WHOIS 查询的延迟与成功情况通过 `RecordQuery` 注入监控器，滚动窗口聚合后输出百分位统计与错误记录：
+
+```mermaid
+flowchart LR
+  Q["🔎 WHOIS 查询"] --> REC["📥 RecordQuery<br/>domain/latency/proxy"]
+  ERR["❌ 查询错误"] --> REcerr["📥 RecordError"]
+  REC --> BUF["🧱 recentLatencies<br/>滚动窗口"]
+  REcerr --> EB["🗂️ recentErrors"]
+  BUF --> CALC["📐 percentile<br/>P90/P95/P99"]
+  CALC --> STATS["📊 PerformanceStats<br/>成功率/QPS/百分位"]
+  EB --> STATS
+  STATS --> LOG["📝 LogStats<br/>周期日志"]
+
+  classDef query fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef record fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef store fill:#909399,color:#fff,stroke:#6b6e72
+  classDef calc fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Q query
+  class REC record
+  class REcerr err
+  class BUF,EB store
+  class CALC calc
+  class STATS,LOG out
+```
+
 | 函数 | 说明 |
 |------|------|
 | `GetMonitor() *PerformanceMonitor` | 获取单例 |

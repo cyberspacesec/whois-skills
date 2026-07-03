@@ -19,6 +19,31 @@
 
 ## 📄 docker-compose.yml 详解
 
+compose 编排以 whois-hacker 服务为核心，挂载持久卷、暴露端口，并配置健康检查（可选 Redis 扩展以支持分布式缓存）：
+
+```mermaid
+flowchart TD
+  COMP["🐙 docker-compose.yml<br/>version 3.8"]
+  COMP --> SVC["🐳 whois-hacker 服务"]
+  SVC --> PORT["🔌 8080:8080<br/>端口映射"]
+  SVC --> VOL["💾 whois_data<br/>→ /app/data"]
+  SVC --> ENV["🌬️ environment<br/>HTTP_HOST/PORT 等"]
+  SVC --> CMD["▶️ command<br/>启动参数"]
+  SVC --> HC["🏥 healthcheck<br/>容器健康探测"]
+  SVC --> RESTART["🔄 restart<br/>unless-stopped"]
+  SVC -. 可选 .-> REDIS["📦 redis<br/>分布式缓存"]
+
+  classDef compose fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+  classDef optional fill:#e6a23c,color:#fff,stroke:#b7821c
+
+  class COMP compose
+  class SVC svc
+  class PORT,VOL,ENV,CMD,HC,RESTART infra
+  class REDIS optional
+```
+
 ```yaml
 version: '3.8'
 

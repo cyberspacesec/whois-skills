@@ -125,6 +125,72 @@ type DomainInfo struct {
 
 ## 🔍 关键实现要点
 
+`GetWhoisServer` 按 TLD 查映射并校验健康，未命中或不健康时回退到默认服务器：
+
+```mermaid
+flowchart TD
+    Domain(["🌐 domain<br/>example.co.uk"])
+    TLD["🔍 extractTLD<br/>基于 PSL"]
+    Lookup["📦 servers[tld] 查映射"]
+    Found{"✅ 命中?"}
+    Disc["📡 DiscoverWhoisServer<br/>问 IANA"]
+    Cache["💾 UpdateServer 缓存"]
+    Health["💚 getHealthyServer<br/>查 serverHealth"]
+    IsH{"💚 IsHealthy?"}
+    Use(["✅ 返回该服务器"])
+    Default["🟠 回退 defaultServer<br/>whois.iana.org"]
+
+    Domain --> TLD --> Lookup --> Found
+    Found -- 否 --> Disc --> Cache --> Health
+    Found -- 是 --> Health
+    Health --> IsH
+    IsH -- 是 --> Use
+    IsH -- 否 --> Default
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class Domain,Use entry
+    class TLD,Lookup,Disc,Cache,Health service
+    class Found,IsH check
+    class Default infra
+```
+
+后台健康检查定期探活每台 WHOIS 服务器：
+
+```mermaid
+flowchart TD
+    Ticker(["⏰ 5min ticker"])
+    Loop["🔄 遍历所有服务器"]
+    Dial["🌐 net.DialTimeout server:43"]
+    Send["📨 发送 example.com 测试查询"]
+    Ok{"✅ 成功?"}
+    Succ["📊 记录响应时间<br/>保留最近100次,算均值"]
+    Fail["📈 FailureCount++"]
+    Thr{"连续失败 ≥3?"}
+    Mark["🔴 标记 IsHealthy=false"]
+    Stay["🟢 保持健康"]
+    Next(["⏭️ 下一个"])
+
+    Ticker --> Loop --> Dial --> Send --> Ok
+    Ok -- 是 --> Succ --> Stay --> Next
+    Ok -- 否 --> Fail --> Thr
+    Thr -- 是 --> Mark --> Next
+    Thr -- 否 --> Next
+    Next --> Loop
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Ticker,Next entry
+    class Loop,Dial,Send,Succ service
+    class Ok,Thr check
+    class Fail,Mark fail
+    class Stay entry
+```
+
 ::: details 单例与初始化
 `GetServerManager` 通过 `managerOnce sync.Once` 初始化：
 

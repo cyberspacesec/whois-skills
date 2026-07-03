@@ -63,6 +63,32 @@ Request: in_progress (或 pending) ──approve_request_completion──▶ don
 通常 `approve_task_completion` 批准最后一个任务时，请求已自动联动为 `done`。本端点用于在所有任务 `approved` 后作显式终态确认，语义上等价但更清晰。
 :::
 
+下图展示批准请求的前置条件校验（所有任务须 approved）与终态确认流程。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /approve_request_completion<br/>{requestId}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ ApproveRequestCompletion]
+  Ctrl --> V1{🔍 请求存在?}
+  V1 -- 否 --> E1[❌ 请求 ID 不存在]
+  V1 -- 是 --> V2{⚙️ 所有任务<br/>approved?}
+  V2 -- 否 --> E2[❌ 所有任务必须先被批准]
+  V2 -- 是 --> Upd[✏️ UpdateRequestStatus<br/>请求→done<br/>填 CompletedAt]
+  Upd --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 请求已完成并批准])
+  E1 & E2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Upd,Prog svc
+  class V1,V2 check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

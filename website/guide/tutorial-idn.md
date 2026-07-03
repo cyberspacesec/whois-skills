@@ -44,6 +44,30 @@ result, _ := whois.ExecuteQueryWithResult(&whois.QueryOptions{
 用户输入的域名可能带协议、路径、大写、Unicode，直接查询会失败。始终先用 `NormalizeDomain`。
 :::
 
+下图展示了 `NormalizeDomain` 的 Punycode 转换流程：
+
+```mermaid
+flowchart TD
+    In["📝 原始输入<br/>https://例.测试/path?query=1"] --> S1["✂️ 去协议前缀"]
+    S1 --> S2["✂️ 去路径 /path?query=1"]
+    S2 --> S3["✂️ 去尾部点 example.com."]
+    S3 --> S4["🔡 转小写"]
+    S4 --> S5{"含非 ASCII?"}
+    S5 -->|是| S6["🌐 idna 转换为 Punycode<br/>xn--fsq.xn--3est"]
+    S5 -->|否| Out["✅ 规范化结果"]
+    S6 --> Out
+    Out --> Q["📡 传入 WHOIS 查询"]
+
+    classDef in fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef act fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    class In in
+    class S1,S2,S3,S4,S6 act
+    class S5 check
+    class Out,Q out
+```
+
 ---
 
 ## 3️⃣ 检测是否为 IDN

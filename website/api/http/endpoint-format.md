@@ -62,6 +62,32 @@ if !req.DetectOnly {
 | `true` | 仅 `format` |
 | `false` | `format` + `formatted` |
 
+下图展示格式化端点根据 `detect_only` 开关决定是否附加格式化结果的分支流程。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/format<br/>{raw_response, detect_only}]) --> MW[🛡️ 中间件链]
+  MW --> V{🔍 raw_response 非空?}
+  V -- 否 --> E[❌ 400 原始响应不能为空]
+  V -- 是 --> D[🔎 whois.DetectWhoisFormat]
+  D --> F[📦 format 字段]
+  F --> Sw{🔀 detect_only?}
+  Sw -- true --> Out1[✅ 仅返回 format]
+  Sw -- false --> FR[📝 whois.FormatRawResponse]
+  FR --> Out2[✅ 返回 format + formatted]
+  E & Out1 & Out2 --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,D,F,FR svc
+  class V,Sw check
+  class E err
+```
+
 ---
 
 ## ✅ 响应示例

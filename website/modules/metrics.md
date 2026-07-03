@@ -63,6 +63,45 @@
 
 告警级别：`Info → Warn → Error → Critical`。
 
+指标从采集到告警通知的完整流水线如下：四类指标由采集器收集，告警管理器周期性评估规则，命中阈值后经通知器分发到多通道。
+
+```mermaid
+flowchart LR
+  subgraph 采集["📊 指标采集 MetricsCollector"]
+    A1["API 指标"]
+    A2["WHOIS 指标"]
+    A3["缓存指标"]
+    A4["系统指标<br/>gopsutil"]
+  end
+  subgraph 评估["🚨 告警评估 AlertManager"]
+    R["4 条默认规则<br/>周期检查"]
+    CHECK{"阈值命中?"}
+  end
+  subgraph 通知["📬 通知分发 Notifier"]
+    N1["Email"]
+    N2["Slack"]
+    N3["Webhook"]
+  end
+
+  A1 --> R
+  A2 --> R
+  A3 --> R
+  A4 --> R
+  R --> CHECK
+  CHECK -->|命中| N1
+  CHECK -->|命中| N2
+  CHECK -->|命中| N3
+  CHECK -->|未命中| R
+
+  classDef collect fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef eval fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef notify fill:#41b883,color:#fff,stroke:#2b7a4b
+
+  class A1,A2,A3,A4 collect
+  class R,CHECK eval
+  class N1,N2,N3 notify
+```
+
 ---
 
 ## 📬 通知器

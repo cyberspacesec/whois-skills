@@ -109,6 +109,41 @@ func RecoveryMiddleware(next http.Handler) http.Handler
 
 ---
 
+## 🔗 中间件链执行流程
+
+下图展示一个请求自外向内穿过四层中间件、再自内向外返回响应的全过程，每层中间件各司其职。
+
+```mermaid
+flowchart TD
+  Req([🌐 HTTP 请求]) --> R1{🛡️ Recovery<br/>是否 panic?}
+  R1 -- 否 --> L1[📝 Logging<br/>记录开始时间]
+  R1 -- 是 --> RErr[⛔ 捕获 panic<br/>返回 500]
+  RErr --> Resp([📤 HTTP 响应])
+
+  L1 --> C1{🌍 CORS<br/>OPTIONS?}
+  C1 -- 是 --> CPre[✅ 直接返回 200<br/>不进业务]
+  CPre --> Resp
+  C1 -- 否 --> A1[🔐 Auth<br/>占位放行]
+
+  A1 --> Handler[⚙️ 业务处理器]
+  Handler --> L2[📝 Logging<br/>计算耗时/写日志]
+  L2 --> Resp
+
+  C1 -.设置跨域头.-> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class L1,A1,Handler,L2,CPre svc
+  class R1,C1 check
+  class RErr err
+```
+
+---
+
 ## 📦 responseWriter 类型
 
 未导出的包装类型，用于捕获响应状态码：

@@ -90,6 +90,31 @@ WHOIS 端点 `handleWhoisQuery` 在 `EnableMetrics` 时调用 `metrics.GetCollec
 先检查 `EnableMetrics`（未启用返回 503），再检查方法（非 GET 返回 405）。即使方法错误，未启用指标时仍返回 503。
 :::
 
+下图展示 metrics 端点的检查顺序与数据来源，强调「先检查开关再检查方法」的优先级。
+
+```mermaid
+flowchart TD
+  Req([🌐 GET /api/metrics]) --> MW[🛡️ 中间件链]
+  MW --> C1{🔍 EnableMetrics?}
+  C1 -- false --> E1[❌ 503 监控功能未启用]
+  C1 -- true --> C2{⚙️ 方法为 GET?}
+  C2 -- 否 --> E2[❌ 405 仅支持GET请求]
+  C2 -- 是 --> Coll[📊 metrics.GetCollector]
+  Coll --> GM[📦 GetMetrics<br/>whois_queries/cache/uptime]
+  GM --> Resp([✅ 200 返回指标])
+  E1 & E2 & Resp --> Out([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,Coll,GM svc
+  class C1,C2 check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

@@ -12,6 +12,28 @@
 | 📊 CSV | `ExportToCSV` | Excel/表格软件查看、数据分析 |
 | 📝 Markdown | `ExportToMarkdown` | 文档生成、报告分享 |
 
+下图展示了 WhoisInfo 经统一函数族分发到多格式输出的流程：
+
+```mermaid
+flowchart LR
+    Info["📦 WhoisInfo"] --> Dispatch{"📤 导出分发"}
+    Dispatch -->|ExportToJSON| JSON["📄 JSON<br/>2 空格缩进"]
+    Dispatch -->|ExportToCSV| CSV["📊 CSV<br/>Field/Value 两列"]
+    Dispatch -->|ExportToMarkdown| MD["📝 Markdown<br/>中文标题表格"]
+    JSON --> Sink["💾 io.Writer<br/>文件/Stdout/HTTP 响应"]
+    CSV --> Sink
+    MD --> Sink
+
+    classDef in fill:#909399,color:#fff,stroke:#6b6e72
+    classDef disp fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fmt fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    class Info in
+    class Dispatch disp
+    class JSON,CSV,MD fmt
+    class Sink out
+```
+
 ---
 
 ## 2️⃣ 基础导出

@@ -69,6 +69,34 @@ Task: done | approved ──delete_task──▶ 拒绝（错误）
 - 任务为 `done` 或 `approved`：返回 `无法删除已完成或已批准的任务`。
 - 任务不存在于请求中：返回 `任务不存在于请求中`。
 
+下图展示删除任务端点的状态校验与双表移除流程，已 done/approved 任务受保护不可删。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /delete_task<br/>{requestId, taskId}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ DeleteTask]
+  Ctrl --> V1{🔍 任务存在于<br/>该请求?}
+  V1 -- 否 --> E1[❌ 任务不存在于请求中]
+  V1 -- 是 --> V2{⚙️ 任务非 done/approved?}
+  V2 -- 否 --> E2[❌ 无法删除已完成/已批准]
+  V2 -- 是 --> Del1[✂️ 从 request.Tasks 切片移除]
+  Del1 --> Del2[✂️ delete tasks 全局表]
+  Del2 --> Upd[🔄 刷新 request.UpdatedAt]
+  Upd --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 任务已删除<br/>request_id 字段名])
+  E1 & E2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Del1,Del2,Upd,Prog svc
+  class V1,V2 check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

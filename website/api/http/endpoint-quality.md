@@ -77,6 +77,48 @@ curl -X POST http://127.0.0.1:8080/api/quality \
 | `poor` | 较差 |
 | `critical` | 严重不足 |
 
+下图展示质量评估从 WHOIS 查询到多维评分再到等级判定的处理流程。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/quality<br/>{domain}]) --> MW[🛡️ 中间件链]
+  MW --> V{🔍 domain 非空?}
+  V -- 否 --> E[❌ 400 域名不能为空]
+  V -- 是 --> Q[🔎 whois.ExecuteQueryWithContext]
+  Q --> R{查询成功?}
+  R -- 否 --> E2[❌ 500 查询失败]
+  R -- 是 --> A[📊 whois.AssessQuality]
+
+  subgraph Score[📐 评分维度]
+    SC1[完整性 completeness]
+    SC2[时效性 timeliness]
+    SC3[可靠性 reliability]
+  end
+
+  A --> Score
+  Score --> Total[🎯 total_score 综合评分]
+  Total --> L{📐 等级判定}
+  L --> L1[🟢 excellent]
+  L --> L2[🟢 good]
+  L --> L3[🟡 fair]
+  L --> L4[🟠 poor]
+  L --> L5[🔴 critical]
+
+  E & E2 & L1 & L2 & L3 & L4 & L5 --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,Q,A,SC1,SC2,SC3,Total svc
+  class V,R,L check
+  class E,E2,L5 err
+  class L1,L2 entry
+  class L3,L4 svc
+```
+
 ---
 
 ## ❌ 错误码

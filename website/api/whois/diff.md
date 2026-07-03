@@ -62,6 +62,48 @@ type WhoisChange struct {
 
 ## 🔍 关键实现要点
 
+`CompareWhois` 按 Domain 区段与 5 个 Contact 区段逐字段比对，输出新增/删除/修改三类变更：
+
+```mermaid
+flowchart TD
+    Start(["🚀 CompareWhois(old, new)"])
+    Nil{"✅ 任一侧 nil?"}
+    AddAll["➕ 整体标记 ChangeAdded"]
+    RemAll["➖ 整体标记 ChangeRemoved"]
+    Domain["📦 compareDomain<br/>created/updated/expiration/<br/>whois_server/dnssec/status/name_servers"]
+    Contacts["👤 compareContact ×5<br/>registrar/registrant/<br/>administrative/technical/billing"]
+    Reflect["🔬 reflect 遍历字段"]
+    Cmp{"字符串值变化?"}
+    Mod["✏️ ChangeModified"]
+    Slice{"切片字段?"}
+    SetCmp["📊 compareStringSlices<br/>set 差集"]
+    Add["➕ ChangeAdded"]
+    Rem["➖ ChangeRemoved"]
+    Out(["✅ []*WhoisChange"])
+
+    Start --> Nil
+    Nil -- old=nil --> AddAll --> Out
+    Nil -- new=nil --> RemAll --> Out
+    Nil -- 否 --> Domain & Contacts
+    Contacts --> Reflect --> Cmp
+    Cmp -- 是 --> Mod
+    Cmp -- 否,检查切片 --> Slice
+    Slice -- 是 --> SetCmp --> Add & Rem
+    Mod --> Out
+    Add --> Out
+    Rem --> Out
+    Domain --> Slice
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Start,Out entry
+    class Domain,Contacts,Reflect,SetCmp service
+    class Nil,Cmp,Slice check
+    class AddAll,RemAll,Mod,Add,Rem service
+```
+
 ::: details 比较范围
 `CompareWhois` 比较以下区段：
 

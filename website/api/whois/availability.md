@@ -71,6 +71,48 @@ type DomainAvailability struct {
 
 ## 🔍 关键实现要点
 
+`CheckDomainAvailabilityWithContext` 通过错误分类将 WHOIS 响应映射为 6 种可注册性状态：
+
+```mermaid
+flowchart TD
+    Start(["🚀 CheckDomainAvailabilityWithContext"])
+    Query(["🔎 ExecuteQueryWithContext"])
+    Err{"❌ 是否返回错误?"}
+    IsErr{"err 类型?"}
+    NotFound["✅ ErrNotFoundDomain<br/>→ available"]
+    Reserved["🔒 ErrReservedDomain<br/>→ reserved"]
+    Premium["💎 ErrPremiumDomain<br/>→ premium"]
+    Blocked["🚫 ErrBlockedDomain<br/>→ blocked"]
+    RateLimit["⏱️ ErrDomainLimitExceed<br/>→ rate_limited"]
+    OtherErr(["❌ 返回 error"])
+    HasDomain{"info.Domain != nil?"}
+    Registered["📋 → registered"]
+    Unknown["❓ → unknown"]
+    Out(["✅ 返回 DomainAvailability"])
+
+    Start --> Query --> Err
+    Err -- 是 --> IsErr
+    IsErr -- NotFoundDomain --> NotFound --> Out
+    IsErr -- ReservedDomain --> Reserved --> Out
+    IsErr -- PremiumDomain --> Premium --> Out
+    IsErr -- BlockedDomain --> Blocked --> Out
+    IsErr -- DomainLimitExceed --> RateLimit --> Out
+    IsErr -- 其他 --> OtherErr
+    Err -- 否 --> HasDomain
+    HasDomain -- 是 --> Registered --> Out
+    HasDomain -- 否 --> Unknown --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Start,Out entry
+    class Query service
+    class Err,IsErr,HasDomain check
+    class NotFound,Reserved,Premium,Blocked,RateLimit,Registered,Unknown service
+    class OtherErr fail
+```
+
 ::: details 判断主流程
 1. 调用 `ExecuteQueryWithContext` 获取 WHOIS 信息
 2. 若返回错误：

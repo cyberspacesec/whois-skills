@@ -34,6 +34,35 @@ func main() {
 
 `QueryASN` 默认使用 `ASNSourceAll`（RDAP 优先，失败回退 RADB），并包含前缀。
 
+下图展示了 ASN 查询的 RADB + RDAP 双源获取流程：
+
+```mermaid
+flowchart TD
+    In["📝 输入 ASN<br/>AS13335"] --> Src{"Source 配置?"}
+    Src -->|ASNSourceRDAP| RDAP["📡 RDAP 查询<br/>结构化 JSON"]
+    Src -->|ASNSourceRADB| RADB["📡 RADB 查询<br/>whois.radb.net:43"]
+    Src -->|ASNSourceAll| Both["🔀 RDAP 优先"]
+    RDAP --> OK1{"成功?"}
+    RADB --> OK2{"成功?"}
+    Both --> OK1
+    OK1 -->|是| Merge["🧩 合并前缀+BGP"]
+    OK1 -->|否| RADB
+    OK2 -->|是| Merge
+    OK2 -->|否| Fail["❌ 返回错误"]
+    Merge --> Detail["✅ ASNDetail<br/>名称/组织/国家/前缀"]
+
+    classDef in fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef act fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+    class In in
+    class RDAP,RADB,Both,Merge act
+    class Src,OK1,OK2 check
+    class Fail err
+    class Detail out
+```
+
 ---
 
 ## 2️⃣ 指定数据源

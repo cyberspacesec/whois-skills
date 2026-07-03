@@ -59,6 +59,47 @@ fmt.Println(cleaned)
 
 ## 🔍 关键实现要点
 
+`DetectWhoisFormat` 按关键词识别 5 大 RIR 与注册商格式，`FormatRawResponse` 逐行清洗保留段落结构：
+
+```mermaid
+flowchart TD
+    Raw(["📥 原始响应文本"])
+    Det(["🔍 DetectWhoisFormat"])
+    Lower["🔤 转小写"]
+    KW{"📨 关键词匹配<br/>(按优先级)"}
+    ARIN["arin → FormatARIN"]
+    RIPE["ripe → FormatRIPE"]
+    APNIC["apnic → FormatAPNIC"]
+    LAC["lacnic → FormatLACNIC"]
+    AFR["afrinic → FormatAFRINIC"]
+    Veri["verisign → FormatVerisign"]
+    PIR["pir → FormatPIR"]
+    Gen["❓ 无匹配 → FormatGeneric"]
+    Fmt(["✅ WhoisFormat"])
+
+    Clean(["🧹 FormatRawResponse"])
+    Line["📝 逐行处理"]
+    Comment["🚫 去注释行 #/%"]
+    Blank["📉 合并连续空行"]
+    Tail["✂️ 去尾部空行"]
+    Out(["✅ 清洗后文本<br/>保留段落结构"])
+
+    Raw --> Det --> Lower --> KW
+    KW --> ARIN & RIPE & APNIC & LAC & AFR & Veri & PIR
+    KW -- 无匹配 --> Gen
+    ARIN & RIPE & APNIC & LAC & AFR & Veri & PIR & Gen --> Fmt
+
+    Raw --> Clean --> Line --> Comment --> Blank --> Tail --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class Raw,Fmt,Clean,Out entry
+    class Det,Lower,ARIN,RIPE,APNIC,LAC,AFR,Veri,PIR,Gen,Line,Comment,Blank,Tail service
+    class KW check
+```
+
 ::: details DetectWhoisFormat 关键词匹配
 将响应文本转为小写后，按子串匹配判断格式：
 

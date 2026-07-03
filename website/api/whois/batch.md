@@ -162,6 +162,59 @@ type CheckpointResult struct {
 
 ## 🔍 关键实现要点
 
+`Process` 通过 worker 池并发执行查询，断点续查贯穿整个生命周期：
+
+```mermaid
+flowchart TD
+    Start(["🚀 Process"])
+    Load{"💾 配置了 CheckpointFile?"}
+    LoadCP["📖 loadCheckpoint<br/>读取已存断点"]
+    CalcPend["🧮 计算 pendingDomains<br/>未完成域名"]
+    Init["🆕 全量域名列表"]
+    CreateCh["📦 创建任务 channel"]
+    Spawn["🧵 启动 N 个 worker goroutine"]
+    Worker["⚙️ worker 循环"]
+    Delay["⏱️ QueryDelay 限速"]
+    Exec["🔎 ExecuteQueryWithResultContextContext"]
+    WriteRes["📨 结果写入 resultChan"]
+    Atom["🔢 原子计数 + 触发断点保存"]
+    Done(["✅ 全部完成"])
+
+    Start --> Load
+    Load -- 是 --> LoadCP --> CalcPend --> CreateCh
+    Load -- 否 --> Init --> CreateCh
+    CreateCh --> Spawn --> Worker
+    Worker --> Delay --> Exec --> WriteRes --> Atom
+    Atom --> Worker
+    Worker -- channel 关闭 --> Done
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class Start,Done entry
+    class LoadCP,CalcPend,Init,CreateCh,Spawn,Worker,Delay,Exec,WriteRes service
+    class Load check
+    class Atom,CreateCh infra
+```
+
+批量处理器的断点状态流转如下：
+
+```mermaid
+stateDiagram-v2
+    [*] --> 初始化: NewStreamBatchProcessor
+    初始化 --> 运行中: Process(ctx, domains)
+    运行中 --> 保存断点: CheckpointInterval 到期
+    保存断点 --> 运行中: 写入 .tmp 后 Rename
+    运行中 --> 已完成: 全部任务结束
+    运行中 --> 已取消: Cancel()
+    已取消 --> 保存断点: 保存当前进度
+    保存断点 --> [*]
+    已完成 --> [*]
+    已取消 --> 恢复中: ResumeFromCheckpoint
+    恢复中 --> 运行中: 加载 pendingDomains
+```
+
 ::: details Process 主流程
 1. 创建带取消的 context
 2. 若配置了 `CheckpointFile`：

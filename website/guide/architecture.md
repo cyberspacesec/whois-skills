@@ -8,26 +8,53 @@
 
 Whois Hacker 采用**分层架构**，从上到下分为：入口层、服务层、能力层、基础设施层。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    🚀 入口层 (cmd)                        │
-│   命令行 flag · YAML 配置 · 优雅关闭 · 版本注入           │
-└─────────────────────────────────────────────────────────┘
-                          │
-┌─────────────────────────────────────────────────────────┐
-│              🌐 服务层 (api · mcp · security)             │
-│   HTTP 路由 · 中间件链 · MCP 任务流 · API Key 认证        │
-└─────────────────────────────────────────────────────────┘
-                          │
-┌─────────────────────────────────────────────────────────┐
-│              🔍 能力层 (pkg/whois · 23 个文件)            │
-│   域名/IP/ASN/RDAP/反向 · 批量 · 关联 · 监控 · 质量      │
-└─────────────────────────────────────────────────────────┘
-                          │
-┌─────────────────────────────────────────────────────────┐
-│           🏗️ 基础设施层 (whois 内置子系统)                │
-│   缓存 · 代理池 · 限流 · 调度 · 服务器管理 · 可观测       │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Entry["🚀 入口层 (cmd)"]
+        CLI["命令行 flag<br/>YAML 配置 · 优雅关闭 · 版本注入"]
+    end
+    subgraph Service["🌐 服务层 (api · mcp · security)"]
+        HTTP["HTTP 路由"]
+        MW["中间件链"]
+        MCP["MCP 任务流"]
+        AUTH["API Key 认证"]
+    end
+    subgraph Capability["🔍 能力层 (pkg/whois · 24 个文件)"]
+        Q["域名/IP/ASN/RDAP/反向"]
+        B["批量 · 关联"]
+        M["监控 · 质量"]
+    end
+    subgraph Infra["🏗️ 基础设施层 (whois 内置子系统)"]
+        Cache["缓存"]
+        Proxy["代理池"]
+        RL["限流"]
+        Sched["调度"]
+        Srv["服务器管理"]
+        Obs["可观测"]
+    end
+    CLI --> HTTP
+    HTTP --> MW
+    MW --> MCP
+    MW --> AUTH
+    HTTP --> Q
+    MCP --> Q
+    Q --> B
+    Q --> M
+    Q --> Cache
+    Q --> Proxy
+    Q --> RL
+    Q --> Sched
+    Q --> Srv
+    Q --> Obs
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef cap fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class CLI entry
+    class HTTP,MW,MCP,AUTH service
+    class Q,B,M cap
+    class Cache,Proxy,RL,Sched,Srv,Obs infra
 ```
 
 ---
@@ -102,18 +129,35 @@ Whois Hacker 采用**分层架构**，从上到下分为：入口层、服务层
 
 ## 🔄 调用关系
 
-```
-cmd/whois-hacker
-  ├── 加载配置 → whois.LoadYAMLConfig
-  ├── 初始化缓存 → whois.NewWhoisCache
-  ├── 加载代理 → whois.LoadProxiesFromFile
-  ├── 启动监控 → metrics.StartSystemMetricsCollection
-  ├── 启动告警 → metrics.StartAlertManager
-  └── 启动 API → api.NewServer
-        ├── 注册 HTTP 路由
-        ├── 中间件链 (Recovery → Logging → CORS → Auth)
-        └── 注册 MCP 路由 → mcp.NewServer
-              └── Controller 委托 → whois.* 查询函数
+```mermaid
+flowchart TD
+    CMD["cmd/whois-hacker<br/>程序入口"]
+
+    CMD --> L1["加载配置<br/>whois.LoadYAMLConfig"]
+    CMD --> L2["初始化缓存<br/>whois.NewWhoisCache"]
+    CMD --> L3["加载代理<br/>whois.LoadProxiesFromFile"]
+    CMD --> L4["启动监控<br/>metrics.StartSystemMetricsCollection"]
+    CMD --> L5["启动告警<br/>metrics.StartAlertManager"]
+    CMD --> L6["启动 API<br/>api.NewServer"]
+
+    L6 --> R["注册 HTTP 路由"]
+    L6 --> MWS["中间件链<br/>Recovery → Logging → CORS → Auth"]
+    L6 --> MCPP["注册 MCP 路由<br/>mcp.NewServer"]
+
+    MCPP --> CTRL["Controller 委托"]
+    CTRL --> W["whois.* 查询函数"]
+
+    R -.委托.-> W
+    MWS -.保护.-> R
+
+    classDef start fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef init fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef api fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef core fill:#909399,color:#fff,stroke:#6b6e72
+    class CMD start
+    class L1,L2,L3,L4,L5,L6 init
+    class R,MWS,MCPP,CTRL api
+    class W core
 ```
 
 ---

@@ -104,6 +104,81 @@ type WhoisError struct {
 
 ## 🔍 关键实现要点
 
+错误类型体系围绕 `WhoisError` 展开，按可重试性分为两大类：
+
+```mermaid
+classDiagram
+    class WhoisError {
+        +ErrorType Type
+        +string Message
+        +error Cause
+        +Error() string
+        +Unwrap() error
+        +IsRetryable() bool
+    }
+
+    class RetryableError {
+        <<可重试>>
+        ErrConnectionReset
+        ErrIntervalTooShort
+        ErrServerConnectFailed
+        ErrAccessTooFast
+        ErrRateLimited
+        ErrQueryTimeout
+    }
+
+    class NonRetryableError {
+        <<不可重试>>
+        ErrDomainEmpty
+        ErrServerNotFound
+        ErrParseFailed
+        ErrValidationFailed
+        ErrProxyFailed
+        ErrCacheMiss
+        ErrReferralFailed
+        ErrDomainNotRegistered
+        ErrDomainReserved
+        ErrDomainBlocked
+    }
+
+    WhoisError <|-- RetryableError
+    WhoisError <|-- NonRetryableError
+```
+
+`CheckError` 通过字符串匹配将原始错误归类为 `WhoisError`，已被分类的错误直接返回避免重复包装：
+
+```mermaid
+flowchart TD
+    Err(["❌ err"])
+    AsCheck{"🔍 errors.As<br/>已是 WhoisError?"}
+    RetWe(["✅ 直接返回 WhoisError"])
+    Match["📝 匹配 err.Error() 关键字"]
+    Conn["connection reset → ErrConnectionReset"]
+    Interv["interval too short → ErrIntervalTooShort"]
+    SrvFail["connect failed → ErrServerConnectFailed"]
+    Fast["access too fast → ErrAccessTooFast"]
+    Limit["query limit → ErrRateLimited"]
+    Timeout["timeout/deadline → ErrQueryTimeout"]
+    Other["❓ 其他 → 未识别"]
+    Wrap(["✅ NewWhoisError 包装"])
+
+    Err --> AsCheck
+    AsCheck -- 是 --> RetWe
+    AsCheck -- 否 --> Match
+    Match --> Conn & Interv & SrvFail & Fast & Limit & Timeout
+    Match -- 无匹配 --> Other
+    Conn & Interv & SrvFail & Fast & Limit & Timeout --> Wrap
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Err,RetWe,Wrap entry
+    class Match,Conn,Interv,SrvFail,Fast,Limit,Timeout service
+    class AsCheck check
+    class Other fail
+```
+
 ::: details CheckError 字符串匹配分类器
 `CheckError` 通过匹配 `err.Error()` 中的关键字进行分类：
 

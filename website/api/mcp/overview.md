@@ -67,6 +67,35 @@ pending ──(首个任务变更)──▶ in_progress ──(所有任务 appr
 `RequestStore.UpdateTask` 在任务状态变更时，会检查请求内**所有任务是否均为 `approved`**——是则请求自动置为 `done` 并填写 `CompletedAt`，否则置为 `in_progress`。`ApproveRequestCompletion` 则要求所有任务 `approved` 后显式批准。
 :::
 
+下图呈现 MCP 协议中请求与任务的完整生命周期状态机，任务由 `pending` 推进至 `done` 再经审批到 `approved`，请求随之在 `pending → in_progress → done` 间联动。
+
+```mermaid
+stateDiagram-v2
+  direction LR
+
+  [*] --> ReqPending : request_planning<br/>新建请求+任务
+
+  state ReqPending : 请求 pending
+  state ReqProgress : 请求 in_progress
+  state ReqDone : 请求 done
+
+  ReqPending --> ReqProgress : mark_task_done<br/>首个任务推进
+
+  state TaskPending : 任务 pending
+  state TaskDone : 任务 done
+  state TaskApproved : 任务 approved
+  state TaskFailed : 任务 failed
+
+  [*] --> TaskPending : 新建任务
+  TaskPending --> TaskDone : mark_task_done
+  TaskPending --> TaskFailed : 执行失败
+  TaskDone --> TaskApproved : approve_task_completion
+  TaskApproved --> ReqDone : 所有任务 approved<br/>(自动联动)
+  ReqProgress --> ReqDone : approve_request_completion<br/>显式终态确认
+  TaskFailed --> [*]
+  ReqDone --> [*]
+```
+
 ---
 
 ## 📡 端点速查表
@@ -94,6 +123,51 @@ pending ──(首个任务变更)──▶ in_progress ──(所有任务 appr
 2. **WHOIS 查询封装**：域名 WHOIS、IP WHOIS、ASN、RDAP、可用性、对比、质量评估、域名规范化——把 `pkg/whois` 的能力集中暴露为统一方法。
 
 因此 MCP 既是任务编排层，也是 WHOIS 能力的统一入口。
+
+下图展示 MCP 协议的整体架构：两条 HTTP 路径（`/mcp/*` 与 `/api/mcp/*`）复用同一套 `Controller`，Controller 既驱动任务状态机，又封装 `pkg/whois` 的查询能力。
+
+```mermaid
+flowchart TD
+  subgraph Routes[📡 HTTP 路径]
+    R1[/mcp/*<br/>gorilla/mux 独立路由]
+    R2[/api/mcp/*<br/>主 API ServeMux 集成]
+  end
+
+  Routes --> Server[🌐 mcp.Server<br/>解码/调用/响应]
+
+  Server --> Ctrl{🎛️ Controller}
+
+  subgraph Task[🅰️ 任务管理]
+    T1[PlanRequest]
+    T2[GetNextTask]
+    T3[MarkTaskDone]
+    T4[ApproveTask/Request]
+    T5[List/Add/Update/Delete]
+  end
+
+  subgraph Query[🅱️ WHOIS 查询封装]
+    Q1[ExecuteWhoisQuery]
+    Q2[ExecuteIP/ASN/RDAP]
+    Q3[CheckAvailability]
+    Q4[Compare/Assess/Normalize]
+  end
+
+  Ctrl --> Task
+  Ctrl --> Query
+
+  Task --> Store[(🗂️ RequestStore<br/>双映射表+RWMutex)]
+  Query --> Whois[(🗄️ pkg/whois<br/>核心库)]
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class R1,R2 entry
+  class Server,T1,T2,T3,T4,T5,Q1,Q2,Q3,Q4 svc
+  class Ctrl check
+  class Store,Whois infra
+```
 
 ---
 

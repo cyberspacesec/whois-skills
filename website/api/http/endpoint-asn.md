@@ -92,6 +92,36 @@ curl -X POST http://127.0.0.1:8080/api/asn \
 | `400` | `asn <= 0` | `ASN必须为正整数` |
 | `500` | 查询失败 | `ASN查询失败: <err>` |
 
+下图展示 ASN 查询的处理流程，重点呈现 `source` 取值映射与数据源选择逻辑。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/asn<br/>{asn, source, ...}]) --> MW[🛡️ 中间件链]
+  MW --> V1{⚙️ 校验<br/>asn > 0?}
+  V1 -- 否 --> E1[❌ 400 ASN必须为正整数]
+  V1 -- 是 --> Src{🔀 source 映射}
+  Src -- radb --> R1[📦 ASNSourceRADB]
+  Src -- rdap --> R2[📦 ASNSourceRDAP]
+  Src -- 其他/空/all --> R3[📦 ASNSourceAll]
+  R1 & R2 & R3 --> Q[🔎 whois.QueryASNWithContext]
+  Q --> V2{查询成功?}
+  V2 -- 否 --> E2[❌ 500 ASN查询失败]
+  V2 -- 是 --> R[✅ 返回 ASN 信息]
+  E1 & E2 & R --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Req,Resp entry
+  class MW,Q,R svc
+  class V1,Src,V2 check
+  class E1,E2 err
+  class R1,R2,R3 infra
+```
+
 ---
 
 ## 🔗 相关

@@ -120,6 +120,40 @@ type ASNInfo struct {
 
 ## 🔍 关键实现要点
 
+`ParseIPWhois` 通过 `detectRIR` 识别响应来源，分派到 5 大 RIR 专用解析器，最终归一为统一的 `IPWhoisInfo`：
+
+```mermaid
+flowchart TD
+    In(["📥 rawResponse + IP"])
+    Det["🔍 detectRIR<br/>关键词/服务器/source:"]
+    Disp{"🔀 RIR?"}
+    ARIN["parseARINResponse<br/>NetRange/CIDR/Org"]
+    RIPE["parseRIPEResponse<br/>inetnum/abuse-c"]
+    APNIC["parseAPNICResponse<br/>复用RIPE→改RIR"]
+    LAC["parseLACNICResponse<br/>owner/ownerid"]
+    AFR["parseAFRINICResponse<br/>复用RIPE→改RIR"]
+    Gen["parseGenericIPResponse<br/>正则兜底"]
+    Out(["✅ IPWhoisInfo<br/>Network/Org/Contacts/ASN"])
+
+    In --> Det --> Disp
+    Disp -- ARIN --> ARIN
+    Disp -- RIPE --> RIPE
+    Disp -- APNIC --> APNIC
+    Disp -- LACNIC --> LAC
+    Disp -- AFRINIC --> AFR
+    Disp -- 未知 --> Gen
+    ARIN & RIPE & APNIC & LAC & AFR & Gen --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class In,Out entry
+    class Det,ARIN,RIPE,APNIC,LAC,AFR service
+    class Disp check
+    class Gen infra
+```
+
 ::: details detectRIR 多层匹配
 `detectRIR` 通过多层策略识别 RIR：
 

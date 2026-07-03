@@ -17,6 +17,32 @@
 
 ## 🔍 现有 CI（ci.yml）
 
+现有 CI 在 push/PR 到 main 时触发，单 test job 串行执行依赖整理与测试：
+
+```mermaid
+flowchart LR
+  TRIG["🔔 push/PR 到 main"] --> CHECKOUT["📦 checkout 代码"]
+  CHECKOUT --> GO["🐹 setup-go 1.23.2"]
+  GO --> TIDY["🧹 go mod tidy"]
+  TIDY --> VERIFY["✅ go mod verify"]
+  VERIFY --> TEST["🧪 go test -v ./..."]
+  TEST --> RESULT{通过?}
+  RESULT -->|是| OK["🟢 CI 通过"]
+  RESULT -->|否| FAIL["🔴 CI 失败"]
+
+  classDef trig fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef step fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef ok fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class TRIG trig
+  class CHECKOUT,GO,TIDY,VERIFY,TEST step
+  class RESULT check
+  class OK ok
+  class FAIL err
+```
+
 现有 `ci.yml` 工作流步骤：
 
 ```yaml
@@ -145,6 +171,32 @@ jobs:
 ---
 
 ## 📌 触发与发布流程
+
+release workflow 在推送 `v*` tag 时触发，三个 job 并行/串行协作完成二进制构建、Release 发布与镜像推送：
+
+```mermaid
+flowchart TD
+  TAG["🏷️ push v* tag"] --> BUILD["🛠️ build-binaries<br/>5 平台交叉编译"]
+  BUILD --> UP["📤 upload-artifact<br/>bin/"]
+  UP --> REL["📦 release job<br/>下载 artifact"]
+  UP --> DOCKER["🐳 docker job"]
+  REL --> GHREL["🚀 创建 GitHub Release<br/>上传 5 个二进制"]
+  DOCKER --> QEMU["🐧 QEMU + Buildx"]
+  QEMU --> LOGIN["🔐 login Docker Hub"]
+  LOGIN --> PUSH["⬆️ 构建并推送<br/>amd64+arm64 镜像"]
+
+  classDef trig fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef build fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef release fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef docker fill:#909399,color:#fff,stroke:#6b6e72
+  classDef secret fill:#e6a23c,color:#fff,stroke:#b7821c
+
+  class TAG trig
+  class BUILD,UP build
+  class REL,GHREL release
+  class DOCKER,QEMU,PUSH docker
+  class LOGIN secret
+```
 
 ```bash
 # 1. 打 tag

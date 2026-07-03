@@ -168,6 +168,40 @@ type RegistrarStat struct {
 
 ## 🔍 关键实现要点
 
+`Analyze` 将多个域名沿五个维度聚类，过滤隐私保护后构建关联图与资产画像：
+
+```mermaid
+flowchart TD
+    Add(["🚀 AddDomain<br/>(domain, info)"])
+    Filter["🔒 隐私保护过滤<br/>email/name/org"]
+    Sub["🗂️ 五维聚类"]
+    E["📧 邮箱<br/>4 联系人区段"]
+    R["👤 注册人<br/>registrant.Name"]
+    O["🏢 组织<br/>registrant.Organization"]
+    N["🌐 NS<br/>取最后两段"]
+    G["🏷️ 注册商<br/>registrar.Name"]
+    Maps["📊 各维 map[string][]string"]
+    Analyze(["🔄 Analyze"])
+    Sig["🔎 collectSignificantClusters<br/>Count≥2"]
+    Sum["📝 generateClusterSummary<br/>频次最高/日期范围"]
+    Graph["🕸️ buildCorrelationGraph<br/>两两建边,Strength累加"]
+    Out(["✅ CorrelationResult"])
+
+    Add --> Filter --> Sub
+    Sub --> E & R & O & N & G
+    E & R & O & N & G --> Maps
+    Maps --> Analyze
+    Analyze --> Sig --> Sum --> Graph --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class Add,Analyze,Out entry
+    class Filter,E,R,O,N,G,Maps,Sig,Sum,Graph service
+    class Sub check
+```
+
 ::: details AddDomain 五维聚类
 对每个域名，按以下维度建立聚类：
 

@@ -18,6 +18,24 @@
 | 🔗 多域名无关联视角 | 单域名孤立查看 | 关联分析引擎，按邮箱/注册人/组织聚类，构建资产画像 |
 | ⏰ 域名变更无感知 | 无法持续跟踪 | 域名监控器，周期检查到期与状态/注册人/NS 变更 |
 
+下图展示了上述痛点与传统方案的对比，以及 Whois Hacker 的应对路径：
+
+```mermaid
+flowchart LR
+    P1["🔁 单点查询低效"] --> S1["优先级队列+并发聚合"]
+    P2["🌐 IDN 编码复杂"] --> S2["内置 Punycode 互转"]
+    P3["📋 注册局格式不一"] --> S3["五大 RIR 自动解析"]
+    P4["🚫 高频易被封禁"] --> S4["代理池+令牌桶+退避"]
+    P5["🔍 结果难结构化"] --> S5["统一 WhoisInfo+导出"]
+    P6["🔗 多域名无关联"] --> S6["关联分析聚类"]
+    P7["⏰ 变更无感知"] --> S7["域名监控+分级告警"]
+
+    classDef pain fill:#f56c6c,color:#fff,stroke:#c04040
+    classDef solve fill:#41b883,color:#fff,stroke:#2b7a4b
+    class P1,P2,P3,P4,P5,P6,P7 pain
+    class S1,S2,S3,S4,S5,S6,S7 solve
+```
+
 ---
 
 ## 🏗️ 核心能力
@@ -107,6 +125,42 @@ Whois Hacker 提供了**五大查询能力**与**七大工程化能力**：
 </div>
 
 </div>
+
+下图汇总了五大查询能力与七大工程化能力的分层关系：
+
+```mermaid
+flowchart TB
+    subgraph Query["🔍 五大查询能力"]
+        D1["域名 WHOIS"]
+        D2["IP WHOIS"]
+        D3["ASN 查询"]
+        D4["RDAP 查询"]
+        D5["反向 WHOIS"]
+    end
+    subgraph Eng["🏗️ 七大工程化能力"]
+        E1["批量处理"]
+        E2["关联分析"]
+        E3["多层缓存"]
+        E4["代理池"]
+        E5["智能调度"]
+        E6["域名监控"]
+        E7["监控告警"]
+    end
+    subgraph IF["🧩 三套对外接口"]
+        I1["Go 库 SDK"]
+        I2["HTTP API"]
+        I3["MCP 协议"]
+    end
+    IF -.驱动.-> Query
+    Query -.增强.-> Eng
+
+    classDef query fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef eng fill:#909399,color:#fff,stroke:#6b6e72
+    classDef iface fill:#41b883,color:#fff,stroke:#2b7a4b
+    class D1,D2,D3,D4,D5 query
+    class E1,E2,E3,E4,E5,E6,E7 eng
+    class I1,I2,I3 iface
+```
 
 ---
 

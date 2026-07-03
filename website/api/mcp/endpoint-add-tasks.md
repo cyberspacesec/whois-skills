@@ -73,6 +73,36 @@ Request: done                   ──add_tasks_to_request──▶ 拒绝（错
 - 请求不存在：返回 `请求 ID ... 不存在`。
 - 任务列表为空：返回 `任务列表不能为空`。
 
+下图展示追加任务端点的前置条件校验与双表登记流程。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /add_tasks_to_request<br/>{requestId, tasks}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ AddTasksToRequest]
+  Ctrl --> V1{🔍 请求存在?}
+  V1 -- 否 --> E1[❌ 请求不存在]
+  V1 -- 是 --> V2{📦 tasks 非空?}
+  V2 -- 否 --> E2[❌ 任务列表不能为空]
+  V2 -- 是 --> V3{⚙️ 请求非 done?}
+  V3 -- 否 done --> E3[❌ 无法向已完成请求添加]
+  V3 -- 是 --> Add[➕ uuid 生成 taskID<br/>状态 pending]
+  Add --> Reg1[📋 追加到 request.Tasks]
+  Add --> Reg2[📋 登记 tasks 全局表]
+  Reg1 & Reg2 --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 已添加 N 个新任务])
+  E1 & E2 & E3 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Add,Reg1,Reg2,Prog svc
+  class V1,V2,V3 check
+  class E1,E2,E3 err
+```
+
 ---
 
 ## 🔗 相关

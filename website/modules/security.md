@@ -67,6 +67,32 @@ type APIKey struct {
 func AuthMiddleware(requiredPermission string) func(http.Handler) http.Handler
 ```
 
+每个受保护请求依次经过 Key 提取、校验、限速三道关卡，任一环节失败即拒绝并记录日志：
+
+```mermaid
+flowchart TD
+  REQ["🌐 请求到达"] --> EXTRACT{"🔑 读取 X-API-Key"}
+  EXTRACT -->|缺失| R401["❌ 401 拒绝<br/>记日志"]
+  EXTRACT -->|存在| VALID{"🔐 ValidateKey<br/>权限校验"}
+  VALID -->|无效/过期| R401
+  VALID -->|通过| RATE{"⏱️ 速率限制<br/>Key:IP 维度"}
+  RATE -->|超限| R429["❌ 429 限速"]
+  RATE -->|放行| PASS["✅ 放行 + 请求日志"]
+  PASS --> NEXT["➡️ 下游处理器"]
+
+  classDef req fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef ok fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+  classDef next fill:#647eff,color:#fff,stroke:#4a5fd6
+
+  class REQ req
+  class EXTRACT,VALID,RATE check
+  class PASS ok
+  class R401,R429 err
+  class NEXT next
+```
+
 处理流程：
 
 1. 读取请求头 `X-API-Key`
@@ -82,6 +108,25 @@ func AuthMiddleware(requiredPermission string) func(http.Handler) http.Handler
 | `GetRequestLogger() *RequestLogger` | 单例（默认保留最近 1000 条） |
 | `NewRequestLogger(maxLogs)` | 自定义容量 |
 | `AddLog(log)` / `GetRecentLogs()` | 记录/查询 |
+
+API Key 从生成到销毁的完整生命周期，状态与属性变更均持久化到 `config/apikeys.json`（权限 0600）：
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> 生成: GenerateAPIKey
+  生成 --> 启用: InitAPIKeys 加载
+  启用 --> 禁用: DisableAPIKey
+  禁用 --> 启用: EnableAPIKey
+  启用 --> 更新属性: UpdatePermissions/RateLimit
+  启用 --> 设置过期: SetKeyExpiration
+  更新属性 --> 启用
+  设置过期 --> 启用
+  启用 --> 删除: DeleteAPIKey
+  禁用 --> 删除
+  删除 --> [*]
+  启用 --> [*]: 过期失效
+```
 
 ---
 

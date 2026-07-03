@@ -100,6 +100,72 @@ type ReverseWhoisClient struct {
 
 ## 🔍 关键实现要点
 
+`ReverseWhoisClient` 是纯委托层，所有查询转发给注入的 `ReverseWhoisProvider`，支持多源替换与 mock：
+
+```mermaid
+classDiagram
+    class ReverseWhoisProvider {
+        <<interface>>
+        +SearchByRegistrant(ctx, query, opts)
+        +SearchByEmail(ctx, email, opts)
+        +SearchByOrganization(ctx, org, opts)
+        +Name() string
+    }
+
+    class ReverseWhoisClient {
+        -provider ReverseWhoisProvider
+        +SearchByEmail(ctx, email, opts)
+        +SearchByRegistrant(ctx, query, opts)
+        +SearchByOrganization(ctx, org, opts)
+        +ProviderName() string
+    }
+
+    class WhoisXMLProvider {
+        调用方自行实现
+        reverse-whois.whoisxmlapi.com
+    }
+
+    class ReverseWhoisComProvider {
+        调用方自行实现
+        reversewhois.com
+    }
+
+    ReverseWhoisProvider <|.. WhoisXMLProvider
+    ReverseWhoisProvider <|.. ReverseWhoisComProvider
+    ReverseWhoisClient --> ReverseWhoisProvider : 委托
+```
+
+三种反查维度统一经客户端委托到 Provider：
+
+```mermaid
+flowchart LR
+    Caller(["🚀 调用方"])
+    Client["🔄 ReverseWhoisClient"]
+    Nil{"🔍 provider == nil?"}
+    Err(["❌ no provider"])
+    Disp["🔀 委托对应方法"]
+    ByEmail["📧 SearchByEmail"]
+    ByReg["👤 SearchByRegistrant"]
+    ByOrg["🏢 SearchByOrganization"]
+    Prov["🔌 ReverseWhoisProvider<br/>第三方实现"]
+    Result(["✅ []*ReverseWhoisResult"])
+
+    Caller --> Client --> Nil
+    Nil -- 是 --> Err
+    Nil -- 否 --> Disp
+    Disp --> ByEmail & ByReg & ByOrg
+    ByEmail & ByReg & ByOrg --> Prov --> Result
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Caller,Result entry
+    class Client,Disp,ByEmail,ByReg,ByOrg,Prov service
+    class Nil check
+    class Err fail
+```
+
 ::: details 纯抽象层
 `reverse.go` 是纯抽象层，所有方法**委托**给 `provider`：
 

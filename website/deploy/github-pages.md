@@ -40,6 +40,30 @@ export default defineConfig({
 
 ## 🚀 部署 workflow 示例
 
+deploy workflow 由 main 分支 website 改动触发，build job 构建产物并上传为 Pages artifact，deploy job 随后发布到 GitHub Pages：
+
+```mermaid
+sequenceDiagram
+  participant Push as 🔔 push main
+  participant Build as 🏗️ build job
+  participant Node as 🐢 setup-node 20
+  participant NPM as 📦 npm install
+  participant Vite as 📝 VitePress build
+  participant Art as 📤 upload-pages-artifact
+  participant Deploy as 🚀 deploy job
+  participant Pages as 🌐 GitHub Pages
+
+  Push->>Build: 触发 (website/** 改动)
+  Build->>Node: actions/setup-node
+  Build->>NPM: npm install
+  NPM->>Vite: npm run build
+  Vite->>Art: 上传 .vitepress/dist
+  Art->>Deploy: needs: build 完成
+  Deploy->>Pages: deploy-pages
+  Pages-->>Deploy: 返回 page_url
+  Deploy->>Deploy: 输出部署地址
+```
+
 新建 `.github/workflows/deploy.yml`：
 
 ```yaml

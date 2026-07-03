@@ -60,6 +60,41 @@ func main() {
 
 `AddDomain` 会按五个维度聚类：
 
+```mermaid
+flowchart LR
+    subgraph Doms["输入域名集合"]
+        A["a.com"]
+        B["b.com"]
+        C["c.com"]
+        D["d.com"]
+    end
+
+    subgraph Dims["五种聚类维度"]
+        E["📧 邮箱<br/>ClusterByEmail"]
+        R["👤 注册人<br/>ClusterByRegistrant"]
+        O["🏢 组织<br/>ClusterByOrg"]
+        N["🖥️ NS<br/>ClusterByNS"]
+        G["🏪 注册商<br/>ClusterByRegistrar"]
+    end
+
+    A & B & C & D --> Dims
+
+    Dims --> Filter["🛡️ 隐私过滤<br/>剔除 Domains By Proxy 等"]
+    Filter --> Engine[("CorrelationEngine<br/>聚类 + 关联图")]
+    Engine --> Out1["Clusters[]<br/>聚类列表"]
+    Engine --> Out2["Graph<br/>节点+边(Strength)"]
+    Engine --> Out3["AssetProfile<br/>资产画像"]
+
+    classDef dom fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef dim fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef proc fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef store fill:#909399,color:#fff,stroke:#6b6e72
+    class A,B,C,D dom
+    class E,R,O,N,G dim
+    class Filter proc
+    class Engine,Out1,Out2,Out3 store
+```
+
 | 维度 | 常量 | 说明 |
 |------|------|------|
 | 📧 邮箱 | `ClusterByEmail` | 相同注册人/管理员邮箱 |

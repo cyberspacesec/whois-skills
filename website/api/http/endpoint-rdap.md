@@ -16,6 +16,36 @@
 RDAP 是 WHOIS 的现代替代协议，返回结构化 JSON 数据，支持国际化与_BOOTSTRAP_路由。三个端点共享 `RDAPQueryOptions` 结构。
 :::
 
+下图对比三个 RDAP 端点的请求路径、处理器与底层查询函数，它们结构一致、仅查询对象类型不同。
+
+```mermaid
+flowchart LR
+  subgraph Endpoints[🌐 RDAP 端点]
+    E1[POST /api/rdap/domain<br/>handleRDAPDomainQuery]
+    E2[POST /api/rdap/ip<br/>handleRDAPIPQuery]
+    E3[POST /api/rdap/asn<br/>handleRDAPASNQuery]
+  end
+
+  E1 --> F1[🔎 QueryRDAPWithContext]
+  E2 --> F2[🔎 QueryRDAP_IPWithContext]
+  E3 --> F3[🔎 QueryRDAP_ASNWithContext]
+
+  F1 & F2 & F3 --> Boot[🔀 RDAP Bootstrap 路由]
+  Boot --> Server[🖥️ RDAP 服务器]
+  Server --> JSON[📦 结构化 JSON 响应]
+  JSON --> Resp([✅ APIResponse])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class E1,E2,E3 entry
+  class F1,F2,F3,Boot,JSON svc
+  class Server infra
+  class Resp entry
+```
+
 ---
 
 ## ① POST /api/rdap/domain — 域名 RDAP 查询

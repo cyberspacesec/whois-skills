@@ -148,6 +148,62 @@ type WhoisClient struct {
 
 ## 🔍 关键实现要点
 
+代理池通过轮询取代理，连续失败 3 次触发熔断，全部熔断时重置给恢复机会。代理节点的状态流转如下：
+
+```mermaid
+stateDiagram-v2
+    [*] --> Available: 加载/健康检查通过
+    Available --> Degraded: 单次失败 FailureCount+1
+    Degraded --> Available: 查询成功 重置计数
+    Degraded --> Unavailable: 连续失败 ≥3 次
+    Unavailable --> Available: 全部不可用时重置
+    note right of Unavailable
+        熔断: GetNextProxy 跳过
+    end note
+    Available --> [*]: 移除
+    Unavailable --> [*]: 移除
+```
+
+`QueryWithContext` 主流程在缓存、代理池、直连三条路径间分派：
+
+```mermaid
+flowchart TD
+    Start(["🚀 QueryWithContext"])
+    Ctx{"✅ ctx.Err()?"}
+    Cache["💾 查缓存"]
+    Hit{"✅ 命中?"}
+    HasPool{"🔒 有代理池?"}
+    Pool["🔄 queryWithProxyPoolContext<br/>轮询代理,失败标记故障"]
+    Direct["🌐 queryDirectContext<br/>extractTLD→getWhoisServer<br/>→RateLimiter→rawWhoisQuery<br/>→跟随referral×3"]
+    Parse{"🔬 解析成功?"}
+    WriteCache["📝 写入缓存"]
+    Out(["✅ 返回 raw"])
+    Fail(["❌ 返回错误"])
+
+    Start --> Ctx
+    Ctx -- 有错 --> Fail
+    Ctx -- 无 --> Cache --> Hit
+    Hit -- 是 --> Out
+    Hit -- 否 --> HasPool
+    HasPool -- 是 --> Pool
+    HasPool -- 否 --> Direct
+    Pool --> Parse
+    Direct --> Parse
+    Parse -- 是 --> WriteCache --> Out
+    Parse -- 否 --> Fail
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Start,Out entry
+    class Cache,Pool,Direct,WriteCache service
+    class Ctx,Hit,HasPool,Parse check
+    class Cache infra
+    class Fail fail
+```
+
 ::: details HTTP 代理 CONNECT 隧道
 HTTP 代理通过 `httpProxyDialer.Dial` 实现 CONNECT 隧道：
 

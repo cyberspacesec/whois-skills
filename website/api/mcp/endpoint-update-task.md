@@ -68,6 +68,32 @@ curl -X POST http://localhost:8080/api/mcp/update_task \
 两个字段均带 `omitempty`，传空字符串视为不更新——可实现只改标题或只改描述的部分更新。
 :::
 
+下图展示更新任务端点的状态校验与部分更新逻辑，拒绝改动已 done/approved 任务。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /update_task<br/>{requestId, taskId, title, description}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ UpdateTask]
+  Ctrl --> V1{🔍 任务归属<br/>该请求?}
+  V1 -- 否 --> E1[❌ 任务不属于指定请求]
+  V1 -- 是 --> V2{⚙️ 任务非 done/approved?}
+  V2 -- 否 --> E2[❌ 无法更新已完成/已批准]
+  V2 -- 是 --> Upd[✏️ 仅非空字段更新<br/>Title/Description<br/>刷新 UpdatedAt]
+  Upd --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 任务信息已更新])
+  E1 & E2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Upd,Prog svc
+  class V1,V2 check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

@@ -51,6 +51,33 @@ fmt.Println("IPv6 前缀：", ipv6) // ["2606:4700::/32", ...]
 
 ## 🔍 关键实现要点
 
+`GetIPRangesByASN` 直连 RADB，逐行扫描响应并按字段归类前缀：
+
+```mermaid
+flowchart LR
+    In(["🚀 GetIPRangesByASN<br/>asn=AS13335"])
+    Conn["🌐 TCP 连接<br/>whois.radb.net:43"]
+    Send["📨 发送 !g{asn}\\n"]
+    Resp["📥 接收多行响应"]
+    Scan["🔍 逐行扫描"]
+    R4["route: → IPv4 列表"]
+    R6["route6: → IPv6 列表"]
+    Skip["🚫 注释/元信息 忽略"]
+    Out(["✅ 返回 ipv4, ipv6"])
+
+    In --> Conn --> Send --> Resp --> Scan
+    Scan --> R4 --> Out
+    Scan --> R6 --> Out
+    Scan --> Skip
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class In,Out entry
+    class Conn,Send,Resp,Scan,R4,R6 service
+    class Skip infra
+```
+
 ::: details 查询协议细节
 直连 `whois.radb.net:43`，发送 RADB 私有查询命令 `!g{asn}\n`。RADB 返回多行文本，逐行扫描：
 

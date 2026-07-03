@@ -116,6 +116,33 @@ docker-compose up -d
 
 ---
 
+下图根据使用场景给出安装方式的选择决策：
+
+```mermaid
+flowchart TD
+    Q["🤔 你的场景是?"] --> C1{"需要二次开发<br/>或嵌入 Go 程序?"}
+    C1 -->|是| S1["🐹 方式一：源码编译<br/>make build"]
+    C1 -->|否| C2{"生产部署<br/>想要容器化?"}
+    C2 -->|是| S2["🐳 方式三/四：Docker/Compose"]
+    C2 -->|否，仅需快速试用| S3["📦 方式二：预编译二进制"]
+    S1 --> V["🔧 验证安装"]
+    S2 --> V
+    S3 --> V
+
+    classDef q fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef src fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef bin fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef dk fill:#909399,color:#fff,stroke:#6b6e72
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    class Q,S1,S2,S3 q
+    class C1,C2 check
+    class S1 src
+    class S2 dk
+    class S3 bin
+```
+
+---
+
 ## 🔧 验证安装
 
 ```bash

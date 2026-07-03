@@ -199,6 +199,47 @@ type RDAPBootstrap struct {
 
 ## 🔍 关键实现要点
 
+RDAP 查询通过内置 bootstrap 映射定位服务器，再发 HTTPS 请求获取 JSON 响应：
+
+```mermaid
+flowchart TD
+    In(["🚀 QueryRDAP*"])
+    Type{"🔀 对象类型?"}
+    Domain["🌐 discoverRDAPServer<br/>TLD → dns map"]
+    IP["🌐 discoverIP_RDAPServer<br/>IP → ipRanges 匹配"]
+    ASN["🌐 discoverASN_RDAPServer<br/>ASN → asnRanges 匹配"]
+    Entity["🌐 discoverEntityRDAPServer<br/>handle 后缀 → RIR"]
+    Found{"✅ 命中映射?"}
+    IANA["🔗 回退 rdap.iana.org"]
+    Server["🎯 RDAP 服务器 URL"]
+    Build["📝 拼接 /domain/ /ip/ /autnum/ 路径"]
+    HTTP["📡 rdapHTTPRequest<br/>Accept: application/rdap+json"]
+    Parse["🔬 JSON unmarshal"]
+    Out(["✅ RDAPResult"])
+
+    In --> Type
+    Type -- 域名 --> Domain
+    Type -- IP --> IP
+    Type -- ASN --> ASN
+    Type -- Entity --> Entity
+    Domain --> Found
+    IP --> Found
+    ASN --> Found
+    Entity --> Found
+    Found -- 否 --> IANA --> Server
+    Found -- 是 --> Server
+    Server --> Build --> HTTP --> Parse --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class In,Out entry
+    class Domain,IP,ASN,Entity,Build,HTTP,Parse service
+    class Type,Found check
+    class IANA,Server infra
+```
+
 ::: details loadDefaults 内置映射
 `loadDefaults` 初始化三张映射表：
 

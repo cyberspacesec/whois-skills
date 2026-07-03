@@ -92,6 +92,36 @@ curl http://127.0.0.1:8080/api/alerts
 先检查 `EnableAlerts`（未启用返回 503），再检查方法（非 GET 返回 405）。
 :::
 
+下图展示 alerts 端点的检查顺序与告警事件的生命周期，告警由阈值触发、可被恢复。
+
+```mermaid
+flowchart TD
+  Req([🌐 GET /api/alerts]) --> MW[🛡️ 中间件链]
+  MW --> C1{🔍 EnableAlerts?}
+  C1 -- false --> E1[❌ 503 告警功能未启用]
+  C1 -- true --> C2{⚙️ 方法为 GET?}
+  C2 -- 否 --> E2[❌ 405 仅支持GET请求]
+  C2 -- 是 --> AM[🚨 metrics.GetAlertManager]
+  AM --> GH[📦 GetHistory]
+  GH --> Resp([✅ 200 返回告警列表])
+  E1 & E2 & Resp --> Out([📤 HTTP 响应])
+
+  subgraph Life[⏰ 告警生命周期]
+    T[触发: value 超过 threshold] --> Act[active: resolved=false]
+    Act --> Res[恢复: resolved=true]
+  end
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,AM,GH,T,Act,Res svc
+  class C1,C2 check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

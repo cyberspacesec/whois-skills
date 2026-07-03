@@ -77,6 +77,69 @@ type Request struct {
 
 `Tasks` 与全局任务映射表共享同一指针，修改任务会同时反映在请求视图与全局查询中。
 
+下图用类图呈现 `Request`、`Task` 与 `RequestStore` 的结构关系，包括双映射表设计与状态常量归属。
+
+```mermaid
+classDiagram
+  class RequestStore {
+    +requests map~string,*Request~
+    +tasks map~string,*Task~
+    -mu sync.RWMutex
+    +AddRequest(req *Request)
+    +GetRequest(id) (*Request, error)
+    +GetTask(id) (*Task, error)
+    +GetNextPendingTask(reqID) (*Task, error)
+    +UpdateTask(id, status, details) error
+    +AddTasksToRequest(reqID, tasks) error
+    +UpdateRequestStatus(reqID, status) error
+    +GetAllRequests() []*Request
+    +IsRequestDone(reqID) (bool, error)
+  }
+
+  class Request {
+    +ID string
+    +OriginalRequest string
+    +SplitDetails string
+    +Status RequestStatus
+    +Tasks []*Task
+    +CreatedAt time.Time
+    +UpdatedAt time.Time
+    +CompletedAt *time.Time
+  }
+
+  class Task {
+    +ID string
+    +Title string
+    +Description string
+    +Status TaskStatus
+    +CreatedAt time.Time
+    +UpdatedAt time.Time
+    +CompletedAt *time.Time
+    +Details string
+  }
+
+  class RequestStatus {
+    <<enumeration>>
+    Pending
+    InProgress
+    Done
+  }
+
+  class TaskStatus {
+    <<enumeration>>
+    Pending
+    Done
+    Approved
+    Failed
+  }
+
+  RequestStore "1" o-- "many" Request : requests 表
+  RequestStore "1" o-- "many" Task : tasks 表
+  Request "1" *-- "many" Task : 共享指针
+  Request --> RequestStatus
+  Task --> TaskStatus
+```
+
 ---
 
 ## 🗃️ RequestStore
@@ -120,6 +183,42 @@ func NewRequestStore() *RequestStore
 ::: tip 关键约定
 `GetNextPendingTask` 在「请求存在但无待处理任务」时返回 `(nil, nil)`——`nil` 任务而非 `nil` error，调用方需同时判断两者。
 :::
+
+下图展示 `RequestStore` 的双映射表设计与读写锁并发控制，`requests` 与 `tasks` 通过共享 `*Task` 指针关联。
+
+```mermaid
+flowchart TD
+  subgraph Store[🗂️ RequestStore]
+    direction TB
+    Mu[🔒 sync.RWMutex<br/>读 RLock / 写 Lock]
+
+    subgraph Maps[双映射表]
+      RM[📦 requests map<br/>requestID → *Request]
+      TM[📦 tasks map<br/>taskID → *Task]
+    end
+  end
+
+  RM --> Req[📄 Request<br/>Tasks: []*Task]
+  TM --> T1[📌 Task A]
+  TM --> T2[📌 Task B]
+  Req -.共享指针.-> T1
+  Req -.共享指针.-> T2
+
+  Op1[🔍 GetTask<br/>O1 查找] -->|RLock| TM
+  Op2[🔍 GetNextPendingTask<br/>遍历请求任务] -->|RLock| RM
+  Op3[✏️ UpdateTask<br/>改状态+联动] -->|Lock| TM
+  Op3 -->|Lock| RM
+  Op4[➕ AddTasksToRequest<br/>登记两表] -->|Lock| RM
+  Op4 -->|Lock| TM
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Op1,Op2 entry
+  class Op3,Op4,Req,T1,T2 svc
+  class Mu,RM,TM,Maps,Store infra
+```
 
 ---
 

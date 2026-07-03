@@ -102,6 +102,51 @@
 - `monitor` 独立，当前未被任何模块直接调用
 - `security` 独立，当前未被主服务调用
 
+下面以模块职责为维度，呈现七大模块的分层关系与调用方向：
+
+```mermaid
+flowchart TD
+  subgraph 入口层["🚀 入口层"]
+    CMD["🚀 cmd<br/>程序入口与配置加载"]
+  end
+  subgraph 服务层["🌐 服务层"]
+    API["🌐 api<br/>HTTP 路由与中间件"]
+    MCP["🤖 mcp<br/>任务状态机"]
+  end
+  subgraph 核心层["🔎 核心能力层"]
+    WHOIS["🔎 whois<br/>查询/解析/缓存/批量"]
+  end
+  subgraph 可观测层["📊 可观测层"]
+    METRICS["📊 metrics<br/>指标与告警"]
+    MONITOR["⏱️ monitor<br/>查询性能百分位"]
+  end
+  subgraph 安全层["🔐 安全层"]
+    SECURITY["🔐 security<br/>API Key 鉴权"]
+  end
+
+  CMD --> API
+  CMD --> METRICS
+  CMD --> WHOIS
+  API --> MCP
+  API --> METRICS
+  API --> WHOIS
+  MCP --> WHOIS
+  MONITOR -. "独立/待接入" .-> WHOIS
+  SECURITY -. "独立/待接入" .-> API
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef core fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef observe fill:#909399,color:#fff,stroke:#6b6e72
+  classDef security_ fill:#e6a23c,color:#fff,stroke:#b7821c
+
+  class CMD entry
+  class API,MCP service
+  class WHOIS core
+  class METRICS,MONITOR observe
+  class SECURITY security_
+```
+
 ::: warning ⚠️ 待接入的模块
 `monitor` 与 `security` 目前是独立可用的库，但尚未接入主 HTTP 服务流程。使用时需在查询层主动调用 `monitor`，或将 `api` 模块的占位 `AuthMiddleware` 替换为 `security.AuthMiddleware`。
 :::

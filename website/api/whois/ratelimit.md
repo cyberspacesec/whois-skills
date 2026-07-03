@@ -76,6 +76,63 @@ type RateLimiter struct {
 
 ## 🔍 关键实现要点
 
+限速器采用「全局桶 + 每服务器桶」双层令牌桶，请求须同时通过两道检查才放行：
+
+```mermaid
+flowchart LR
+    Req(["🌐 查询请求<br/>server"])
+    Global["🔵 globalBucket<br/>全局令牌桶"]
+    Per["🟠 serverBuckets[server]<br/>每服务器令牌桶"]
+    GAllow{"✅ 全局桶<br/>tokens≥1?"}
+    PAllow{"✅ 服务器桶<br/>tokens≥1?"}
+    Pass["🟢 放行<br/>各扣1令牌"]
+    Block["🔴 拒绝/等待"]
+    Refill["💧 按时间差补充令牌<br/>上限=maxTokens"]
+
+    Req --> Global --> GAllow
+    GAllow -- 是 --> Per --> PAllow
+    GAllow -- 否 --> Block
+    PAllow -- 是 --> Pass
+    PAllow -- 否 --> Block
+    Global -.-> Refill
+    Per -.-> Refill
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Req,Pass entry
+    class Global,Per,Refill service
+    class GAllow,PAllow check
+    class Block fail
+```
+
+单个令牌桶的工作原理：
+
+```mermaid
+flowchart TD
+    Allow(["🔍 bucket.allow()"])
+    Calc["⏱️ 计算距上次 refill 秒数"]
+    Add["💧 tokens += 秒数 × rate<br/>上限 maxTokens"]
+    Check{"🧮 tokens ≥ 1?"}
+    Consume["➖ tokens -= 1"]
+    Update["📝 更新 lastRefill"]
+    Yes(["✅ true"])
+    No(["❌ false"])
+
+    Allow --> Calc --> Add --> Check
+    Check -- 是 --> Consume --> Update --> Yes
+    Check -- 否 --> No
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    class Allow,Yes entry
+    class Calc,Add,Consume,Update service
+    class Check check
+    class No entry
+```
+
 ::: details tokenBucket 令牌桶
 未导出的 `tokenBucket` 结构：
 

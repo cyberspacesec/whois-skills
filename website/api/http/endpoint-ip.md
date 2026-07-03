@@ -74,6 +74,32 @@ curl -X POST http://127.0.0.1:8080/api/ip \
 | `400` | `ip` 为空 | `IP地址不能为空` |
 | `500` | 查询失败 | `IP查询失败: <err>` |
 
+下图展示 IP WHOIS 查询的处理流程，从参数校验到委托 `pkg/whois` 查询并返回结果。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/ip<br/>{ip, timeout, use_proxy}]) --> MW[🛡️ 中间件链<br/>Recovery→Logging→CORS→Auth]
+  MW --> V1{⚙️ 校验<br/>方法/JSON?}
+  V1 -- 失败 --> E1[❌ 400/405]
+  V1 -- 通过 --> V2{🔍 ip 非空?}
+  V2 -- 否 --> E2[❌ 400 IP地址不能为空]
+  V2 -- 是 --> Q[🔎 whois.QueryIPWithOptions]
+  Q --> V3{查询成功?}
+  V3 -- 否 --> E3[❌ 500 IP查询失败]
+  V3 -- 是 --> R[✅ 封装 APIResponse]
+  E1 & E2 & E3 & R --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,Q,R svc
+  class V1,V2,V3 check
+  class E1,E2,E3 err
+```
+
 ---
 
 ## 🔗 相关

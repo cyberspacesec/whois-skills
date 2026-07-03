@@ -174,6 +174,63 @@ type WhoisLibraryConfig struct {
 
 ## 🔍 关键实现要点
 
+配置加载遵循「环境变量 → 文件 → 默认值」的优先级链，应用前需通过校验：
+
+```mermaid
+flowchart TD
+    Get(["🚀 GetWhoisLibraryConfig"])
+    Env{"📁 WHOIS_CONFIG_FILE<br/>环境变量?"}
+    LoadFile["📖 LoadWhoisLibraryConfigFromFile<br/>按 .json/.yaml 分派"]
+    Default["⚙️ DefaultWhoisLibraryConfig"]
+    Merge["🔧 MergeWhoisLibraryConfigs<br/>非零字段覆盖"]
+    Apply(["🚀 ApplyWhoisLibraryConfig"])
+    Validate{"✅ ValidateWhoisLibraryConfig"}
+    ApplyLog["📝 应用日志级别/格式"]
+    SetGlobal["🌍 设置全局单例"]
+    Ready(["✅ 配置生效"])
+    Fail(["❌ 返回错误"])
+
+    Get --> Env
+    Env -- 有 --> LoadFile --> Merge
+    Env -- 无 --> Default --> Merge
+    Merge --> Apply
+    Apply --> Validate
+    Validate -- 失败 --> Fail
+    Validate -- 通过 --> ApplyLog --> SetGlobal --> Ready
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Get,Apply,Ready entry
+    class LoadFile,Default,Merge,ApplyLog,SetGlobal service
+    class Env,Validate check
+    class Merge infra
+    class Fail fail
+```
+
+全局配置结构整合九大子系统，关系如下：
+
+```mermaid
+flowchart LR
+    Lib["⚙️ WhoisLibraryConfig<br/>全局单例 sync.Once"]
+    Lib --> Q["🔎 Query"]
+    Lib --> C["💾 Cache"]
+    Lib --> P["🔒 Proxy"]
+    Lib --> R["⏱️ RateLimit"]
+    Lib --> B["📦 Batch"]
+    Lib --> M["👁️ Monitor"]
+    Lib --> S["🎛️ Scheduler"]
+    Lib --> O["📈 Observability"]
+    Lib --> L["📝 Log"]
+
+    classDef core fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    class Lib core
+    class Q,C,P,R,B,M,S,O,L service
+```
+
 ::: details 全局单例与环境变量
 - 全局单例通过 `libConfigOnce sync.Once` 初始化
 - `libConfigFromEnv` 读取 `WHOIS_CONFIG_FILE` 环境变量，若存在则从该文件加载

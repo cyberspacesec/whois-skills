@@ -56,6 +56,39 @@ curl -X POST http://127.0.0.1:8080/api/correlation \
 单个域名查询失败不会终止整个关联分析，失败域名被跳过，仅记录告警日志。
 :::
 
+下图展示关联分析对一组域名逐个查询（失败跳过）、聚合进引擎后统一分析的处理流程。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/correlation<br/>{domains: ≥2}]) --> MW[🛡️ 中间件链]
+  MW --> V{🔍 域名数 ≥ 2?}
+  V -- 否 --> E[❌ 400 至少需要2个域名]
+  V -- 是 --> Engine[🎛️ NewCorrelationEngine]
+  Engine --> Loop{🔁 逐个域名}
+
+  Loop --> Q[🔎 ExecuteQueryWithContext]
+  Q --> R{查询成功?}
+  R -- 否 --> Skip[⚠️ 记录告警并跳过<br/>不中断]
+  R -- 是 --> Add[📥 engine.AddDomain]
+  Skip --> Loop
+  Add --> Loop
+  Loop -- 遍历完成 --> Analyze[🔬 engine.Analyze]
+  Analyze --> Resp([✅ 返回关联关系<br/>shared_registrars/score])
+
+  E --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,Engine,Q,Add,Analyze svc
+  class V,Loop,R check
+  class E err
+  class Skip svc
+```
+
 ---
 
 ## ✅ 响应示例

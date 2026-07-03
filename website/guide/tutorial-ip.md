@@ -32,6 +32,28 @@ func main() {
 2. `extractReferralServer` 提取 RIR 服务器
 3. 查询 RIR 服务器获取详细响应
 
+下图展示了 IP WHOIS 从 IANA 引导到 RIR 查询的时序：
+
+```mermaid
+sequenceDiagram
+    participant C as 调用方
+    participant Q as QueryIP
+    participant IANA as whois.iana.org
+    participant RIR as RIR 服务器
+    participant P as ParseIPWhois
+
+    C->>Q: QueryIP("8.8.8.8")
+    Q->>IANA: WHOIS 8.8.8.8
+    IANA-->>Q: 引导文本(含 referral)
+    Q->>Q: extractReferralServer
+    Q->>RIR: WHOIS 8.8.8.8(定位到 ARIN)
+    RIR-->>Q: 详细响应原文
+    Q->>P: ParseIPWhois(raw, ip)
+    P->>P: detectRIR + 解析器
+    P-->>Q: IPWhoisInfo
+    Q-->>C: QueryResult(含 RawResponse)
+```
+
 ---
 
 ## 2️⃣ 带选项查询
@@ -121,6 +143,32 @@ type IPWhoisInfo struct {
 | 🌍 AFRINIC | 非洲 | "afrinic" |
 
 每个 RIR 有独立解析器，最终统一到 `IPWhoisInfo`。
+
+下图展示了 `detectRIR` 如何根据响应关键词分发到各 RIR 解析器并归一化输出：
+
+```mermaid
+flowchart TD
+    Raw["📥 原始 RIR 响应"] --> Detect{"detectRIR<br/>关键词匹配"}
+    Detect -->|"american registry"| ARIN["🇺🇸 ARIN 解析器"]
+    Detect -->|"ripe network"| RIPE["🇪🇺 RIPE 解析器"]
+    Detect -->|"asia pacific"| APNIC["🌏 APNIC 解析器"]
+    Detect -->|"lacnic"| LACNIC["🌎 LACNIC 解析器"]
+    Detect -->|"afrinic"| AFRINIC["🌍 AFRINIC 解析器"]
+    ARIN --> Out["📦 统一 IPWhoisInfo"]
+    RIPE --> Out
+    APNIC --> Out
+    LACNIC --> Out
+    AFRINIC --> Out
+
+    classDef raw fill:#909399,color:#fff,stroke:#6b6e72
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef parser fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    class Raw raw
+    class Detect check
+    class ARIN,RIPE,APNIC,LACNIC,AFRINIC parser
+    class Out out
+```
 
 ---
 

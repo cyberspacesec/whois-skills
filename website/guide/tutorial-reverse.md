@@ -94,6 +94,34 @@ type ReverseWhoisResult struct {
 }
 ```
 
+下图展示了反向 WHOIS 的 Provider 抽象与多源聚合结构：
+
+```mermaid
+flowchart TB
+    subgraph Client["🔄 ReverseWhoisClient"]
+        Search["SearchByEmail / ByRegistrant / ByOrganization"]
+    end
+    subgraph Iface["🧩 ReverseWhoisProvider 接口"]
+        P1["ReverseWhois.com"]
+        P2["WhoisXML API"]
+        P3["自定义 Provider"]
+    end
+    subgraph Out["📦 聚合输出"]
+        Agg["去重/排序/过滤<br/>ReverseWhoisResult 列表"]
+    end
+    Client --> Iface
+    Iface --> Agg
+    Agg --> Rel["🔗 进入关联分析引擎"]
+
+    classDef client fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef iface fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    class Search client
+    class P1,P2,P3 iface
+    class Agg out
+    class Rel out
+```
+
 ---
 
 ## 5️⃣ 反查 + 关联分析

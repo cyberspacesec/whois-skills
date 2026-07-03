@@ -122,6 +122,37 @@ metrics.GetCollector().RecordWHOISQuery(result.Server, err == nil, duration)
 
 记录查询服务器、成功与否与耗时。
 
+下图展示一次 WHOIS 查询从客户端到 whois 核心库再到响应的完整时序，含中间件链、参数校验与可选指标记录。
+
+```mermaid
+sequenceDiagram
+  participant C as 🌐 客户端
+  participant MW as 🛡️ 中间件链
+  participant H as ⚙️ handleWhoisQuery
+  participant W as 🔎 pkg/whois
+  participant M as 📊 metrics
+
+  C->>MW: POST /api/whois {domain, timeout, ...}
+  MW->>MW: Recovery→Logging→CORS→Auth
+  MW->>H: 转发请求
+  H->>H: 校验方法/JSON/domain 非空
+  alt 校验失败
+    H-->>C: 400/405 错误响应
+  else 校验通过
+    H->>W: ExecuteQueryWithResult(domain, opts)
+    alt 查询失败
+      W-->>H: error
+      H-->>C: 500 查询失败
+    else 查询成功
+      W-->>H: QueryResult{info, raw, latency, ...}
+      opt EnableMetrics=true
+        H->>M: RecordWHOISQuery(server, success, duration)
+      end
+      H-->>C: 200 {success, data}
+    end
+  end
+```
+
 ---
 
 ## 🔗 相关

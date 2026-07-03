@@ -36,6 +36,36 @@ type APIResponse struct {
 `Message`、`Data`、`Error` 均带 `omitempty`，零值字段不会出现在 JSON 中。成功响应不含 `error`，失败响应不含 `data`。
 :::
 
+下图说明 `APIResponse` 如何根据成功/失败两条路径被封装，并由 `SendSuccessResponse` / `SendErrorResponse` 写入 HTTP 响应。
+
+```mermaid
+flowchart LR
+  subgraph Result[⚙️ 业务处理结果]
+    OK[✅ 成功 data]
+    Fail[❌ 失败 err]
+  end
+
+  OK --> SS[📤 SendSuccessResponse<br/>WriteHeader 200]
+  Fail --> SE[📤 SendErrorResponse<br/>WriteHeader 4xx/5xx]
+
+  SS --> Succ[📦 APIResponse<br/>success=true<br/>data=...]
+  SE --> Err[📦 APIResponse<br/>success=false<br/>error=...]
+
+  Succ --> Enc1[🔧 json.Encoder<br/>流式编码]
+  Err --> Enc2[🔧 json.Encoder<br/>流式编码]
+
+  Enc1 --> Resp([🌐 HTTP 响应])
+  Enc2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class OK,Resp entry
+  class SS,Succ,Enc1,SE,Enc2 svc
+  class Fail,Err err
+```
+
 ---
 
 ## 🔧 发送函数

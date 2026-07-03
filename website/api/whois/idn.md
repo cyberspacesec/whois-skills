@@ -47,6 +47,45 @@ u, _ := whois.PunycodeToUnicode("xn--fsq.xn--3est")
 
 ## 🔍 关键实现要点
 
+`NormalizeDomain` 是 IDN 查询前的标准预处理流水线，将任意域名输入收敛为 WHOIS 协议可接受的 Punycode 形式：
+
+```mermaid
+flowchart LR
+    In(["🌐 任意输入<br/>https://例.测试/path"])
+    StripProto["✂️ 去协议前缀<br/>http/https"]
+    StripPath["✂️ 去路径/query/fragment"]
+    StripDot["✂️ 去尾部 FQDN 点"]
+    Lower["🔤 转小写"]
+    IsASCII{"🅰️ 含非 ASCII?"}
+    Puny["🔄 UnicodeToPunycode<br/>idna.ToASCII"]
+    Pass["⏩ 直接通过"]
+    Out(["✅ WHOIS 可用域名<br/>xn--fsq.xn--3est"])
+
+    In --> StripProto --> StripPath --> StripDot --> Lower --> IsASCII
+    IsASCII -- 是 --> Puny --> Out
+    IsASCII -- 否 --> Pass --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    class In,Out entry
+    class StripProto,StripPath,StripDot,Lower,Puny,Pass service
+    class IsASCII check
+```
+
+Unicode 与 Punycode 双向转换关系：
+
+```mermaid
+flowchart LR
+    U["🌐 Unicode<br/>例.测试"]
+    P["🅰️ Punycode<br/>xn--fsq.xn--3est"]
+    U -- "UnicodeToPunycode<br/>idna.ToASCII" --> P
+    P -- "PunycodeToUnicode<br/>idna.ToUnicode" --> U
+
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    class U,P service
+```
+
 ::: details NormalizeDomain 规范化步骤
 `NormalizeDomain` 适合查询前预处理，依次执行：
 

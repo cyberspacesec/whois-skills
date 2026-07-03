@@ -147,6 +147,43 @@ var DefaultCacheConfig = CacheConfig{
 
 ## 🔍 关键实现要点
 
+`WhoisCache` 支持 `LocalCache`（内存）与 `RedisCache`（远程）两种实现，读写均经 `CacheProvider` 接口分发：
+
+```mermaid
+flowchart LR
+    App(["🌐 查询路径"])
+    Singleton["💾 GetCache 全局单例<br/>sync.Once"]
+    Prov{"🔀 Type?"}
+    Local["📦 LocalCache<br/>map + RWMutex"]
+    Redis["🗄️ RedisCache<br/>whois:{domain}"]
+    Hit{"✅ 命中 & 未过期?"}
+    Return["✅ 返回缓存条目"]
+    Miss["❌ 未命中/已过期"]
+    Query["🔎 执行 WHOIS 查询"]
+    Set["📝 Set 写入缓存"]
+
+    App --> Singleton --> Prov
+    Prov -- local --> Local
+    Prov -- redis --> Redis
+    Local --> Hit
+    Redis --> Hit
+    Hit -- 是 --> Return
+    Hit -- 否 --> Miss
+    Miss --> Query --> Set
+    Set --> Local
+    Set --> Redis
+    Set --> Return
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class App,Return entry
+    class Singleton,Local,Redis,Query,Set service
+    class Prov,Hit check
+    class Miss infra
+```
+
 ::: details LocalCache 实现
 - 底层 `map[string]*CacheEntry` + `sync.RWMutex`
 - `Get` 检查 `ExpiresAt`，过期则删除并返回未命中

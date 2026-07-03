@@ -113,6 +113,34 @@ curl -X POST http://127.0.0.1:8080/api/idn \
 | `punycode` | `string` | `to_punycode` 时 | Punycode 结果 |
 | `unicode` | `string` | `to_unicode` 时 | Unicode 结果 |
 
+下图展示 IDN 端点根据 `action` 分派到不同转换函数的处理流程，`original` 与 `is_idn` 始终返回。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/idn<br/>{domain, action}]) --> MW[🛡️ 中间件链]
+  MW --> V{🔍 domain 非空?}
+  V -- 否 --> E[❌ 400 域名不能为空]
+  V -- 是 --> Idn[🔎 whois.IsIDN<br/>判定 is_idn]
+  Idn --> Sw{🔀 action}
+  Sw -- normalize/默认 --> N[🔧 NormalizeDomain]
+  Sw -- to_punycode --> P[🔧 UnicodeToPunycode]
+  Sw -- to_unicode --> U[🔧 PunycodeToUnicode]
+  Sw -- check --> C[✅ 仅返回检测结果]
+  Sw -- 非法 --> E2[❌ 400 无效的action]
+  N & P & U & C --> Out[📦 组装响应<br/>original/is_idn + 转换结果]
+  E & E2 & Out --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,Idn,N,P,U,C,Out svc
+  class V,Sw check
+  class E,E2 err
+```
+
 ---
 
 ## ❌ 错误码

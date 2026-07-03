@@ -134,6 +134,46 @@ type ASNPeer struct {
 
 ## 🔍 关键实现要点
 
+`QueryASNWithContext` 支持三种数据源，`ASNSourceAll` 模式下 RDAP 失败自动回退 RADB：
+
+```mermaid
+flowchart TD
+    Start(["🚀 QueryASNWithContext"])
+    Valid{"✅ ASN > 0?"}
+    Cache["💾 查全局 asnDetailCache"]
+    Hit{"命中缓存?"}
+    Src{"🔀 Source?"}
+    RDAP["📡 queryASNFromRDAP<br/>调用 QueryRDAP_ASNWithContext"]
+    RADB["🔢 queryASNFromRADB<br/>解析 as-name/descr/route"]
+    RDAPOk{"RDAP 成功?"}
+    WriteCache["💾 写入缓存"]
+    Out(["✅ 返回 ASNDetail"])
+    Fail(["❌ 返回错误"])
+
+    Start --> Valid
+    Valid -- 否 --> Fail
+    Valid -- 是 --> Cache --> Hit
+    Hit -- 是 --> Out
+    Hit -- 否 --> Src
+    Src -- ASNSourceRDAP --> RDAP --> RDAPOk
+    Src -- ASNSourceRADB --> RADB --> WriteCache
+    Src -- ASNSourceAll --> RDAP --> RDAPOk
+    RDAPOk -- 是 --> WriteCache
+    RDAPOk -- 否,回退RADB --> RADB
+    WriteCache --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Start,Out entry
+    class RDAP,RADB,WriteCache service
+    class Valid,Hit,Src,RDAPOk check
+    class Cache infra
+    class Fail fail
+```
+
 ::: details QueryASNWithContext 主流程
 1. 校验 ASN > 0
 2. 查全局 `asnDetailCache`，命中则返回

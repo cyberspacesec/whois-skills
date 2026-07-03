@@ -17,6 +17,33 @@
 
 ## 🛠️ 构建
 
+从源码到上线有两条路径：本地 Makefile 构建或下载 GitHub Releases 预编译产物，部署方式可选直接运行或 systemd 托管。
+
+```mermaid
+flowchart LR
+  SRC["📂 源码仓库"] --> BUILD{"🛠️ 构建方式"}
+  BUILD -->|make build/build-all| LOCAL["📦 bin/ 二进制<br/>ldflags 注入版本"]
+  BUILD -->|下载 Release| REL["📥 预编译二进制"]
+  LOCAL --> DEPLOY{"🚀 部署方式"}
+  REL --> DEPLOY
+  DEPLOY -->|直接执行| RUN["🏃 ./whois-hacker --flag"]
+  DEPLOY -->|systemd 托管| SVC["🖥️ systemctl 服务<br/>开机自启/失败重启"]
+  RUN --> HEALTH["✅ curl /api/health"]
+  SVC --> HEALTH
+
+  classDef src fill:#909399,color:#fff,stroke:#6b6e72
+  classDef build fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef out fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef deploy fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef ok fill:#41b883,color:#fff,stroke:#2b7a4b
+
+  class SRC src
+  class BUILD,DEPLOY build
+  class LOCAL,REL out
+  class RUN,SVC deploy
+  class HEALTH ok
+```
+
 ### 单平台构建
 
 ```bash

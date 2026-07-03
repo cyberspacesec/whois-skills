@@ -119,6 +119,55 @@ type ValidationResult struct {
 4. ❌ 错误分类：`isRetryableError`（调用 `CheckError`）判断是否可重试
 5. 📊 返回 `QueryResult`
 
+下面是主流程的精简版（完整版见 [guide/query-flow.md](../../guide/query-flow.md)）：
+
+```mermaid
+flowchart TD
+    Start(["🚀 ExecuteQueryWithResultContext"])
+    Valid{"✅ Domain 非空?"}
+    SetDef["⏱️ 设置默认超时 10s"]
+    Loop["🔁 进入重试循环<br/>0..MaxRetries"]
+    Ctx{"⏱️ ctx 超时?"}
+    Wait["💤 select 等待 IntervalMils"]
+    GetSrv["🖥️ GetWhoisServer<br/>选择服务器"]
+    Exec["🌐 executeQueryWithTimeout<br/>执行查询"]
+    Parse["🔬 whoisparser.Parse<br/>解析响应"]
+    Valid2{"📋 ValidateResult?"}
+    Validate["✅ validateQueryResult<br/>校验必填字段"]
+    CheckErr{"❌ CheckError 可重试?"}
+    Retry{"🔁 还有重试次数?"}
+    ReturnOK(["✅ 返回 QueryResult"])
+    ReturnFail(["❌ 返回错误"])
+
+    Start --> Valid
+    Valid -- 否 --> ReturnFail
+    Valid -- 是 --> SetDef
+    SetDef --> Loop
+    Loop --> Ctx
+    Ctx -- 是 --> ReturnFail
+    Ctx -- 否 --> Wait
+    Wait --> GetSrv
+    GetSrv --> Exec
+    Exec --> Parse
+    Parse --> Valid2
+    Valid2 -- 是 --> Validate
+    Valid2 -- 否 --> CheckErr
+    Validate --> CheckErr
+    CheckErr -- 是(可重试) --> Retry
+    CheckErr -- 否(成功/不可重试) --> ReturnOK
+    Retry -- 是 --> Loop
+    Retry -- 否 --> ReturnFail
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Start,ReturnOK entry
+    class SetDef,Loop,Wait,GetSrv,Exec,Parse,Validate service
+    class Valid,Ctx,Valid2,CheckErr,Retry check
+    class ReturnFail fail
+```
+
 ::: details 🔍 executeQueryWithTimeout 内部
 - 若 ctx 无 deadline 则附加 `Timeout`
 - 用 goroutine + channel + `select` 实现超时

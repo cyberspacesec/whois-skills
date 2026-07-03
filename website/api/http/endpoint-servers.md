@@ -59,6 +59,30 @@ curl http://127.0.0.1:8080/api/servers
 | `servers` | `map[string]string` | TLD → WHOIS 服务器地址映射 |
 | `stats` | `ServerStats` | 服务器统计信息 |
 
+下图展示此只读端点从 ServerManager 获取全量服务器配置与统计信息的处理流程。
+
+```mermaid
+flowchart LR
+  Req([🌐 GET /api/servers]) --> MW[🛡️ 中间件链]
+  MW --> V{⚙️ 方法为 GET?}
+  V -- 否 --> E[❌ 405 仅支持GET请求]
+  V -- 是 --> SM[🗄️ GetServerManager]
+  SM --> All[📦 GetAllServers<br/>TLD→服务器映射]
+  SM --> Stat[📊 GetServerStats<br/>total/loaded/custom]
+  All & Stat --> Resp([✅ 200 返回 servers+stats])
+  E --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class MW,SM,All,Stat svc
+  class V check
+  class E err
+```
+
 ---
 
 ## ❌ 错误码

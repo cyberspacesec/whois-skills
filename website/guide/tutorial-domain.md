@@ -26,6 +26,34 @@ func main() {
 
 `Execute` 是旧版兼容 API，内部委托给 `ExecuteQueryWithContext`。
 
+下图展示了域名 WHOIS 查询的完整数据流（输入→查询→解析→输出）：
+
+```mermaid
+flowchart LR
+    In["📝 输入 Domain<br/>example.com"] --> Norm["🌐 IDN 规范化<br/>NormalizeDomain"]
+    Norm --> Q{"FollowReferral?"}
+    Q -->|是| R1["🔍 查询注册局引导<br/>whois.iana.org"]
+    R1 --> R2["🔗 跟随到注册商服务器"]
+    Q -->|否| R2
+    R2 --> Fetch["📡 拉取原始响应<br/>代理/重试/限速"]
+    Fetch --> Parse["📋 解析为 WhoisInfo<br/>whois-parser"]
+    Parse --> Valid{"校验完整性?"}
+    Valid -->|失败| Miss["⚠️ 报告缺失字段"]
+    Valid -->|通过| Out["✅ QueryResult<br/>含延迟/原始响应/重试次数"]
+    Miss --> Out
+
+    classDef in fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef act fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+    class In in
+    class Norm,R1,R2,Fetch,Parse act
+    class Q,Valid check
+    class Miss err
+    class Out out
+```
+
 ---
 
 ## 2️⃣ 完整结果查询（推荐）

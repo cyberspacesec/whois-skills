@@ -61,6 +61,45 @@ type APIResponse struct {
 请求 → RecoveryMiddleware → LoggingMiddleware → CORSMiddleware → AuthMiddleware → 业务处理器
 ```
 
+下面的流程图展示了 HTTP API 的整体路由结构与中间件链执行顺序，请求自左向右穿过四层中间件后抵达业务处理器。
+
+```mermaid
+flowchart LR
+  Client([🌐 客户端请求]) --> Recovery[🛡️ RecoveryMiddleware<br/>捕获 panic]
+  Recovery --> Logging[📝 LoggingMiddleware<br/>记录访问日志]
+  Logging --> CORS[🌍 CORSMiddleware<br/>处理跨域/OPTIONS]
+  CORS --> Auth[🔐 AuthMiddleware<br/>认证占位]
+  Auth --> Router{🔀 路由分发<br/>http.ServeMux}
+
+  Router --> WHOIS[🔎 WHOIS 核心<br/>whois/ip/asn]
+  Router --> RDAP[🌐 RDAP<br/>domain/ip/asn]
+  Router --> Analysis[🔍 域名分析<br/>diff/quality/correlation]
+  Router --> Batch[📦 批量查询<br/>batch/status]
+  Router --> Format[📝 格式化导出<br/>format/export]
+  Router --> Tools[🌍 IDN 工具<br/>idn/servers]
+  Router --> System[📊 系统<br/>metrics/alerts/health]
+  Router --> MCP[🤖 MCP 端点<br/>/api/mcp/*]
+
+  WHOIS --> Lib[(🗄️ pkg/whois<br/>核心库)]
+  RDAP --> Lib
+  Analysis --> Lib
+  Batch --> Lib
+  Format --> Lib
+  Tools --> Lib
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef mw fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef biz fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Client entry
+  class Recovery,Logging,CORS,Auth mw
+  class Router check
+  class WHOIS,RDAP,Analysis,Batch,Format,Tools,System,MCP biz
+  class Lib infra
+```
+
 | 顺序 | 中间件 | 职责 |
 |------|--------|------|
 | 1（最外） | RecoveryMiddleware | 捕获 panic，返回 500 |
@@ -146,6 +185,68 @@ type APIResponse struct {
 | POST | `/api/mcp/delete_task` | 删除任务 |
 
 完整端点总览见 [endpoints.md](./endpoints.md)。
+
+下图按功能分类汇总全部端点，颜色按职责区分：绿色为只读系统端点，蓝色为业务查询端点，灰色为底层依赖。
+
+```mermaid
+flowchart TD
+  subgraph Core[🔎 WHOIS 核心查询]
+    W1[POST /api/whois]
+    W2[POST /api/ip]
+    W3[POST /api/asn]
+  end
+
+  subgraph Rdap[🌐 RDAP 查询]
+    R1[POST /api/rdap/domain]
+    R2[POST /api/rdap/ip]
+    R3[POST /api/rdap/asn]
+  end
+
+  subgraph Analysis[🔍 域名分析]
+    A1[POST /api/availability]
+    A2[POST /api/diff]
+    A3[POST /api/quality]
+    A4[POST /api/correlation]
+  end
+
+  subgraph Batch[📦 批量查询]
+    B1[POST /api/batch]
+    B2[GET /api/batch/status]
+  end
+
+  subgraph Export[📝 格式化与导出]
+    E1[POST /api/format]
+    E2[POST /api/export/json]
+    E3[POST /api/export/csv]
+    E4[POST /api/export/markdown]
+  end
+
+  subgraph Tools[🌍 IDN 与工具]
+    T1[POST /api/idn]
+    T2[GET /api/servers]
+  end
+
+  subgraph System[📊 系统端点]
+    S1[GET /api/metrics]
+    S2[GET /api/alerts]
+    S3[GET /api/health]
+  end
+
+  Core --> Lib[(🗄️ pkg/whois)]
+  Rdap --> Lib
+  Analysis --> Lib
+  Batch --> Lib
+  Export --> Lib
+  Tools --> Lib
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef biz fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class S1,S2,S3,T2 entry
+  class W1,W2,W3,R1,R2,R3,A1,A2,A3,A4,B1,B2,E1,E2,E3,E4,T1 biz
+  class Lib infra
+```
 
 ---
 

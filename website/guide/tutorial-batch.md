@@ -16,6 +16,52 @@
 
 就用 `StreamBatchProcessor`。
 
+```mermaid
+flowchart TD
+    Domains["📄 domains.txt<br/>N 个域名"]
+    Init["NewStreamBatchProcessor<br/>读取配置 + 断点"]
+    Queue[("任务队列<br/>去重/排序")]
+    Sem{"并发信号量<br/>Concurrency=5"}
+
+    Worker1["Worker 1"]
+    Worker2["Worker 2"]
+    WorkerN["Worker ...N"]
+
+    RL["⏱️ 域间限速<br/>QueryDelay"]
+    Q["ExecuteQueryWithResult"]
+    CacheHit{"缓存命中?"}
+
+    CB1["📈 OnProgress<br/>进度+剩余预估"]
+    CB2["📨 OnResult<br/>逐条结果"]
+    Ch["channel Results()"]
+
+    CP["💾 断点原子写入<br/>每 CheckpointInterval 个"]
+    Done(["完成 / Cancel"])
+
+    Domains --> Init --> Queue --> Sem
+    Sem --> Worker1 & Worker2 & WorkerN
+    Worker1 & Worker2 & WorkerN --> RL --> Q
+    Q --> CacheHit
+    CacheHit -- 是 --> CB2
+    CacheHit -- 否 --> CB2
+    CB2 --> CB1
+    CB2 --> Ch
+    CB1 --> CP
+    CP --> Done
+    Q -.失败重试.-> Sem
+
+    classDef io fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef worker fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef cb fill:#909399,color:#fff,stroke:#6b6e72
+    classDef store fill:#e6a23c,color:#fff,stroke:#b7821c
+    class Domains,Init io
+    class Worker1,Worker2,WorkerN,RL,Q worker
+    class Sem,CacheHit check
+    class CB1,CB2,Ch,Done cb
+    class Queue,CP store
+```
+
 ---
 
 ## 1️⃣ 基础用法
@@ -97,6 +143,21 @@ config := whois.StreamBatchConfig{
 ---
 
 ## 3️⃣ 断点续查
+
+中断后从断点恢复。批处理任务的状态流转如下：
+
+```mermaid
+stateDiagram-v2
+    [*] --> 新建: NewStreamBatchProcessor
+    新建 --> 运行中: Process(domains)
+    运行中 --> 暂存断点: 每 N 个完成 / Cancel
+    暂存断点 --> 运行中: 继续处理
+    运行中 --> 完成: 全部域名处理完
+    暂存断点 --> 恢复中: ResumeFromCheckpoint
+    恢复中 --> 运行中: 从断点续查
+    完成 --> [*]
+    恢复中 --> [*]: 配置错误
+```
 
 中断后从断点恢复：
 

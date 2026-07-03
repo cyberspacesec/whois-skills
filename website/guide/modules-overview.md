@@ -16,6 +16,41 @@
 | 👁️ monitor | `pkg/monitor/` | 1 | 性能监控 | <span class="status-tag beta">Beta</span> |
 | 🔒 security | `pkg/security/` | 3 + config | API Key 认证 | <span class="status-tag beta">Beta</span> |
 
+## 🗺️ 模块依赖关系图
+
+箭头表示"依赖 / 调用"方向。`whois` 核心库位于中心，不依赖服务层，可独立作为库使用。
+
+```mermaid
+flowchart LR
+    cmd["🚀 cmd<br/>入口/生命周期"]
+    api["🌐 api<br/>HTTP 路由+中间件"]
+    mcp["🤖 mcp<br/>任务流状态机"]
+    sec["🔒 security<br/>API Key 认证"]
+    whois["🔍 whois<br/>核心能力库 (23 文件)"]
+    metrics["📈 metrics<br/>指标+告警"]
+    monitor["👁️ monitor<br/>性能监控"]
+
+    cmd --> api
+    cmd --> mcp
+    cmd --> whois
+    cmd --> metrics
+    cmd --> monitor
+    api --> sec
+    api --> whois
+    mcp --> whois
+    metrics --> whois
+    monitor --> whois
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef core fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef obs fill:#909399,color:#fff,stroke:#6b6e72
+    class cmd entry
+    class api,mcp,sec service
+    class whois core
+    class metrics,monitor obs
+```
+
 ---
 
 ## 🔍 whois 核心库 23 文件速览
@@ -72,6 +107,33 @@
 ---
 
 ## 🌐 对外暴露的三套接口
+
+```mermaid
+flowchart TB
+    Core(("🔍 whois 核心库"))
+
+    subgraph IF["三套对外接口"]
+        direction LR
+        Lib["📘 Go 库 API<br/>pkg/whois 导出函数"]
+        Http["🌐 HTTP API<br/>16+ 端点 · JSON"]
+        Mcpp["🤖 MCP 协议<br/>10 端点 · 任务流"]
+    end
+
+    Lib --> Core
+    Http --> Core
+    Mcpp --> Core
+
+    User1["👨‍💻 Go 开发者"] --> Lib
+    User2["🌐 HTTP 客户端"] --> Http
+    User3["🤖 AI Agent"] --> Mcpp
+
+    classDef core fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef iface fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef user fill:#41b883,color:#fff,stroke:#2b7a4b
+    class Core core
+    class Lib,Http,Mcpp iface
+    class User1,User2,User3 user
+```
 
 ### Go 库 API
 

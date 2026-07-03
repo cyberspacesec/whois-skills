@@ -60,6 +60,34 @@ type Server struct {
 
 ## 🔗 中间件链
 
+`addMiddleware` 按以下顺序包裹（外层先执行），请求依次穿透中间件链到达路由处理器，响应再沿原路返回：
+
+```mermaid
+flowchart LR
+  REQ["🌐 HTTP 请求"] --> MW1["🛡️ Recovery<br/>捕获 panic"]
+  MW1 --> MW2["📝 Logging<br/>请求日志"]
+  MW2 --> MW3["🌍 CORS<br/>跨域头"]
+  MW3 --> MW4{"🔐 Auth<br/>认证检查"}
+  MW4 -->|通过| ROUTER["🚏 路由分发<br/>16+ 端点"]
+  MW4 -->|拒绝| ERR1["❌ 401 拒绝"]
+  ROUTER --> HANDLER["⚙️ 处理器<br/>whois/mcp/metrics"]
+  HANDLER --> RESP["📦 统一响应包装"]
+
+  classDef req fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef mw fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef route fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+  classDef resp fill:#909399,color:#fff,stroke:#6b6e72
+
+  class REQ req
+  class MW1,MW2,MW3 mw
+  class MW4 check
+  class ROUTER,HANDLER route
+  class ERR1 err
+  class RESP resp
+```
+
 `addMiddleware` 按以下顺序包裹（外层先执行）：
 
 1. **RecoveryMiddleware** — 捕获 panic，返回 500

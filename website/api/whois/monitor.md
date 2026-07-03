@@ -165,6 +165,67 @@ type DomainAlert struct {
 
 ## 🔍 关键实现要点
 
+监控器周期检查域名，按剩余天数与字段变更生成告警，域名的监控状态在以下状态间流转：
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active: 添加监控 AddWatch
+    Active --> Warning: 剩余天数 ≤ WarningDays
+    Active --> Critical: 剩余天数 ≤ CriticalDays
+    Active --> Expired: 剩余天数 ≤ 0
+    Warning --> Critical: 临近到期加深
+    Warning --> Expired: 域名过期
+    Critical --> Expired: 域名过期
+    Active --> Changed: 检测到字段变更
+    Changed --> Active: 变更已记录
+    Active --> Error: 查询失败
+    Warning --> Error: 查询失败
+    Error --> Active: 下次检查恢复
+    Expired --> [*]: 移除监控
+```
+
+`checkDomain` 在每次检查时同时进行到期评估与变更检测：
+
+```mermaid
+flowchart TD
+    Tick(["⏰ 周期/CheckNow"])
+    Query(["🔎 ExecuteQuery 获取最新信息"])
+    Days["📅 calculateDaysRemaining<br/>6 种日期格式"]
+    Det{"🧮 剩余天数判定"}
+    Expired["🔴 Expired 告警"]
+    Crit["🟠 Critical 告警"]
+    Warn["🟡 Warning 告警"]
+    OK["🟢 Active"]
+    Diff["🔄 CompareWhois(LastInfo, New)"]
+    Cmp{"📝 字段变更?"}
+    Status["📋 Status 切片变更"]
+    Reg["👤 注册人变更"]
+    NS["🌐 NS 变更"]
+    Emit["📣 emitAlert 非阻塞发送"]
+    Update["💾 更新 LastInfo"]
+
+    Tick --> Query --> Days --> Det
+    Det -- ≤0 --> Expired
+    Det -- ≤Critical --> Crit
+    Det -- ≤Warning --> Warn
+    Det -- 其他 --> OK
+    OK --> Diff --> Cmp
+    Cmp -- 是 --> Status & Reg & NS
+    Cmp -- 否 --> Update
+    Expired & Crit & Warn & Status & Reg & NS --> Emit
+    Emit --> Update
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Tick,Query,Update entry
+    class Days,Diff,Status,Reg,NS,Emit service
+    class Det,Cmp check
+    class Expired,Crit,Warn fail
+    class OK entry
+```
+
 ::: details Start 周期检查
 `Start` 创建 ticker 按 `CheckInterval` 周期触发 `checkAll`，并在启动时**立即执行首次检查**，避免等待一个周期才出结果。
 

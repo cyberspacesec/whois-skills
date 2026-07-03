@@ -170,6 +170,76 @@ type AdaptiveRateLimiter struct {
 
 ## 🔍 关键实现要点
 
+调度器按「调度→执行→反馈」循环运作，每台服务器独立维护健康状态与退避周期：
+
+```mermaid
+stateDiagram-v2
+    [*] --> Healthy: 新建 ServerState
+    Healthy --> Healthy: 成功 → decreaseInterval
+    Healthy --> Backoff: 限速/连接失败 → 指数退避
+    Backoff --> Healthy: 退避到期且恢复
+    Backoff --> Unhealthy: 连续失败 ≥ 阈值(3)
+    Unhealthy --> Healthy: 恢复间隔到期/手动标记
+    note right of Healthy
+        AdaptiveInterval 随延迟自适应
+        成功×10 → 限速器提速×1.1
+    end note
+    note right of Backoff
+        CurrentBackoff ×2 倍增
+        上限 BackoffMaxMs
+    end note
+```
+
+`Schedule` + `RecordResult` 构成调度主循环：
+
+```mermaid
+flowchart TD
+    Sch(["🚀 Schedule(server)"])
+    State["📦 获取 ServerState"]
+    H{"💚 Healthy?"}
+    BO{"⏰ 退避期内?"}
+    RL{"🚦 RateLimiter.Allow()?"}
+    WaitBO["💤 返回剩余退避时间"]
+    WaitRL["💤 返回 1000/rate ms"]
+    Now(["✅ 返回 0,立即执行"])
+    Unhealthy(["❌ 返回错误"])
+    Exec(["🌐 执行查询"])
+    Rec(["📊 RecordResult"])
+    Ok{"✅ 成功?"}
+    Succ["📉 decreaseInterval<br/>重置连续失败"]
+    Err{"❌ 错误类型?"}
+    RateLimit["🔥 handleRateLimit<br/>指数退避+降速×0.7"]
+    Fail["📈 ConsecutiveFailures++"]
+    Threshold{"≥阈值?"}
+    Mark["🔴 标记 Unhealthy"]
+
+    Sch --> State --> H
+    H -- 否 --> Unhealthy
+    H -- 是 --> BO
+    BO -- 是 --> WaitBO
+    BO -- 否 --> RL
+    RL -- 否 --> WaitRL
+    RL -- 是 --> Now
+    Now --> Exec --> Rec --> Ok
+    Ok -- 是 --> Succ
+    Ok -- 否 --> Err
+    Err -- 限速/连接失败 --> RateLimit
+    Err -- 其他 --> Fail
+    RateLimit --> Fail
+    Fail --> Threshold
+    Threshold -- 是 --> Mark
+    Threshold -- 否 --> State
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Sch,Now,Exec,Rec entry
+    class State,Succ,RateLimit,Fail,WaitBO,WaitRL service
+    class H,BO,RL,Ok,Err,Threshold check
+    class Unhealthy,Mark fail
+```
+
 ::: details Schedule 调度逻辑
 1. 获取或创建 `ServerState`
 2. 若不健康 → 返回错误

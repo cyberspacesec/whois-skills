@@ -109,6 +109,33 @@ httpServer.Shutdown(5s)     ── 优雅关闭
 collector.ExportMetrics("data/metrics_final.json")  ── (enableMetrics)
 ```
 
+启动序列时序：从 flag 解析、配置合并到各子系统初始化，再到 HTTP 服务监听与信号驱动的优雅关闭，构成完整的进程生命周期。
+
+```mermaid
+sequenceDiagram
+  participant Main as 🚀 main
+  participant Flag as 🏷️ flag
+  participant Cfg as ⚙️ 配置
+  participant Whois as 🔎 whois
+  participant Subsys as 🧩 子系统
+  participant API as 🌐 api.Server
+  participant HTTP as 📡 http.Server
+  participant Sig as 📶 signal
+
+  Main->>Flag: flag.Parse()
+  Main->>Cfg: loadConfigFromFile()
+  Cfg->>Cfg: 命令行 > YAML > 默认 合并
+  Main->>Subsys: setupLogging / setupCache / setupProxy
+  Main->>Subsys: setupMetrics / setupAlerts
+  Main->>Whois: 加载 servers.json
+  Main->>API: NewServer + 功能开关
+  Main->>HTTP: CreateHandler() + ListenAndServe (goroutine)
+  HTTP-->>Main: 服务就绪
+  Sig->>Main: SIGINT / SIGTERM
+  Main->>HTTP: Shutdown(5s)
+  Main->>Subsys: ExportMetrics("metrics_final.json")
+```
+
 ---
 
 ## 🧩 setup 系列函数

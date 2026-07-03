@@ -70,6 +70,36 @@ Task: done ──approve_task_completion──▶ approved
 - 任务非 `done` 状态：返回 `任务必须先标记为完成才能批准`。
 - 任务不属于该请求：返回 `任务不属于指定的请求`。
 
+下图展示批准任务的前置条件校验与请求自动联动的判定逻辑。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /approve_task_completion<br/>{requestId, taskId}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ ApproveTaskCompletion]
+  Ctrl --> V1{🔍 任务归属<br/>该请求?}
+  V1 -- 否 --> E1[❌ 任务不属于指定请求]
+  V1 -- 是 --> V2{⚙️ 任务为 done?}
+  V2 -- 否 --> E2[❌ 必须先标记为完成]
+  V2 -- 是 --> Upd[✏️ UpdateTask<br/>done→approved]
+  Upd --> Link[🔁 请求联动检查]
+  Link --> Ck{所有任务 approved?}
+  Ck -- 是 --> RD[请求→done<br/>填 CompletedAt]
+  Ck -- 否 --> RP[请求→in_progress]
+  RD & RP --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 响应])
+  E1 & E2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Upd,Link,RD,RP,Prog svc
+  class V1,V2,Ck check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

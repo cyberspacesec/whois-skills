@@ -161,6 +161,83 @@ type OtelTrace struct {
 
 ## 🔍 关键实现要点
 
+指标体系围绕 `MetricsProvider` 接口展开，`CompositeMetrics` 作为组合器将记录操作 fan-out 到多个实现：
+
+```mermaid
+classDiagram
+    class MetricsProvider {
+        <<interface>>
+        +RecordWHOISQuery(server, success, duration)
+        +RecordCacheOperation(operation, hit)
+        +RecordAPIRequest(method, path, statusCode, duration)
+        +RecordRateLimit(server)
+        +RecordActiveQueries(count)
+        +Name() string
+    }
+
+    class PrometheusMetricsProvider {
+        +counters map
+        +histograms map
+        +gauges map
+        +ExportPrometheusFormat() string
+    }
+
+    class OpenTelemetryMetricsProvider {
+        +traces []OtelTrace
+        最多保留100条(FIFO)
+    }
+
+    class NopMetricsProvider {
+        空实现
+    }
+
+    class CompositeMetrics {
+        +BuiltInStats 原子计数
+        +providers []MetricsProvider
+        +fan-out 记录
+    }
+
+    MetricsProvider <|.. PrometheusMetricsProvider
+    MetricsProvider <|.. OpenTelemetryMetricsProvider
+    MetricsProvider <|.. NopMetricsProvider
+    CompositeMetrics o-- MetricsProvider : 组合多个
+```
+
+便捷记录函数与全局单例的调用链：
+
+```mermaid
+flowchart LR
+    App(["🌐 业务代码"])
+    Rec["📝 RecordWHOISQuery<br/>RecordCacheOp<br/>RecordAPIReq"]
+    Ctx{"🔍 context 有 metrics?"}
+    CtxM["📦 MetricsFromContext"]
+    Global["🌍 GetGlobalMetrics<br/>全局单例"]
+    Comp["🧩 CompositeMetrics"]
+    Atomic["🔢 BuiltInStats 原子计数"]
+    Prom["📊 Prometheus"]
+    OTel["📈 OpenTelemetry"]
+    Nop["🚫 Nop"]
+    Export["📤 ExportPrometheusFormat"]
+
+    App --> Rec --> Ctx
+    Ctx -- 有 --> CtxM
+    Ctx -- 无 --> Global
+    CtxM --> Comp
+    Global --> Comp
+    Comp --> Atomic
+    Comp --> Prom & OTel & Nop
+    Comp --> Export
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+    class App,Export entry
+    class Rec,CtxM,Global,Comp,Atomic,Prom,OTel service
+    class Ctx check
+    class Nop infra
+```
+
 ::: details CompositeMetrics fan-out
 `CompositeMetrics` 维护：
 

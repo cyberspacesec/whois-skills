@@ -110,6 +110,37 @@ fmt.Println("可注册域名:", available)
 错误分类通过比较 `err.Error()` 字符串匹配（非 `errors.Is`），因为 `whoisparser` 的错误类型有限。详见 [errors.go](../api/whois/errors.md)。
 :::
 
+下图展示了可用性检测的状态判断链：
+
+```mermaid
+flowchart TD
+    Start["📝 输入域名"] --> Norm["🌐 NormalizeDomain"]
+    Norm --> Exec["📡 ExecuteQueryWithContext"]
+    Exec --> Err{"err 类型?"}
+    Err -->|ErrNotFoundDomain| Avail["🟢 available<br/>可注册"]
+    Err -->|ErrReservedDomain| Res["🟡 reserved<br/>被保留"]
+    Err -->|ErrPremiumDomain| Prem["🟠 premium<br/>需高价"]
+    Err -->|ErrBlockedDomain| Blk["🔴 blocked<br/>被屏蔽"]
+    Err -->|ErrDomainLimitExceed| RL["⚪ rate_limited<br/>稍后再试"]
+    Err -->|nil 且有 info.Domain| Reg["🔵 registered<br/>已注册"]
+    Err -->|其他| Unk["⚪ unknown<br/>无法判断"]
+
+    classDef start fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef act fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef ok fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef warn fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef bad fill:#f56c6c,color:#fff,stroke:#c04040
+    classDef unk fill:#909399,color:#fff,stroke:#6b6e72
+    class Start start
+    class Norm,Exec act
+    class Err check
+    class Avail ok
+    class Res,Prem warn
+    class Blk,Reg bad
+    class RL,Unk unk
+```
+
 ---
 
 ## 6️⃣ HTTP API 调用

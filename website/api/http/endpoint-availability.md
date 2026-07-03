@@ -90,6 +90,33 @@ curl -X POST http://127.0.0.1:8080/api/availability \
 | `reserved` | 域名被保留 |
 | `error` | 检查失败或无法判断 |
 
+下图展示可用性检查的判定流程与 `status` 各取值的产生路径。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/availability<br/>{domain}]) --> MW[🛡️ 中间件链]
+  MW --> V{🔍 domain 非空?}
+  V -- 否 --> E[❌ 400 域名不能为空]
+  V -- 是 --> Q[🔎 whois.CheckDomainAvailabilityWithContext]
+  Q --> R{查询结果}
+  R -- 可注册 --> S1[✅ status=available]
+  R -- 已注册 --> S2[🟦 status=registered]
+  R -- 被保留 --> S3[🟧 status=reserved]
+  R -- 失败/无法判断 --> S4[❌ status=error]
+  E & S1 & S2 & S3 & S4 --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp,S1 entry
+  class MW,Q svc
+  class V,R check
+  class E,S4 err
+  class S2,S3 svc
+```
+
 ---
 
 ## ❌ 错误码

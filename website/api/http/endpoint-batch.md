@@ -146,6 +146,45 @@ while true; do
 done
 ```
 
+下图展示批量查询「提交即返回 → 后台异步执行 → 客户端轮询进度」的完整交互时序。
+
+```mermaid
+sequenceDiagram
+  participant C as 🌐 客户端
+  participant H as ⚙️ handleBatchQuery
+  participant S as 🗃️ batchSessions
+  participant P as 🔄 StreamBatchProcessor
+  participant W as 🔎 pkg/whois
+  participant ST as 📊 handleBatchStatus
+
+  C->>H: POST /api/batch {domains, concurrency, ...}
+  H->>H: 构造 config（覆盖默认值）
+  H->>P: whois.NewStreamBatchProcessor(config)
+  H->>H: 生成 sessionID = batch-<UnixNano>
+  H->>S: 存入 batchSession{ID, Processor, Domains}
+  H-->>C: 200 {session_id, total, status_url}
+
+  rect rgb(100, 116, 255, 0.1)
+    Note over P,W: 后台异步执行（不阻塞响应）
+    H->>P: go processor.Process(ctx, domains)
+    loop 逐个域名
+      P->>W: ExecuteQueryWithContext
+      W-->>P: 结果
+    end
+  end
+
+  loop 轮询进度
+    C->>ST: GET /api/batch/status?id=<sessionID>
+    ST->>S: 查找会话
+    alt 会话不存在
+      ST-->>C: 404 会话不存在
+    else 会话存在
+      ST->>P: 读取 StreamBatchStats
+      ST-->>C: 200 {stats: progress, completed, eta}
+    end
+  end
+```
+
 ---
 
 ## ❌ 错误码

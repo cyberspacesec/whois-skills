@@ -86,6 +86,46 @@ type batchSession struct {
 2. `CreateHandler()` 创建路由处理器
 3. `http.ListenAndServe(addr, router)` 启动
 
+下面的时序图展示了服务器从创建到监听的生命周期，包括中间件装配、路由注册与请求处理全过程。
+
+```mermaid
+sequenceDiagram
+  participant User as 👤 调用方
+  participant Srv as 🖥️ Server
+  participant Chain as 🛡️ 中间件链
+  participant Router as 🔀 ServeMux
+  participant Handler as ⚙️ 业务处理器
+
+  User->>Srv: NewServer(host, port)
+  Note over Srv: 初始化配置字段<br/>EnableMetrics/Alerts/Cache
+  User->>Srv: AddMiddleware(自定义MW)（可选）
+  User->>Srv: Start()
+
+  rect rgb(100, 116, 255, 0.1)
+    Note over Srv,Chain: 装配阶段
+    Srv->>Srv: createRouter() 注册全部路由
+    Srv->>Chain: addMiddleware(router)
+    Note over Chain: Auth → CORS → Logging → Recovery → 自定义
+    Srv-->>Srv: 返回包装后的 handler
+  end
+
+  rect rgb(65, 184, 131, 0.1)
+    Note over Srv: 监听阶段
+    Srv->>Srv: http.ListenAndServe(addr, handler)
+    Note over Srv: 阻塞监听 Host:Port
+  end
+
+  rect rgb(100, 116, 255, 0.1)
+    Note over User,Handler: 运行时处理请求
+    User->>Chain: HTTP 请求
+    Chain->>Chain: Recovery → Logging → CORS → Auth
+    Chain->>Router: 转发到匹配路由
+    Router->>Handler: 调用对应 handler
+    Handler-->>Chain: 响应结果
+    Chain-->>User: HTTP 响应
+  end
+```
+
 ---
 
 ## 🔗 中间件链装配
@@ -127,6 +167,51 @@ func (s *Server) addMiddleware(next http.Handler) http.Handler {
 - IDN 与工具：`/api/idn`、`/api/servers`
 - 系统端点：`/api/metrics`、`/api/alerts`、`/api/health`
 - MCP 端点：`registerMCPRoutes(router)` 注册 10 个 `/api/mcp/*` 端点
+
+下图呈现 `createRouter()` 注册的全部路由分类与底层依赖关系，路由器统一调度各业务端点并委托 `pkg/whois` 与 `pkg/mcp`。
+
+```mermaid
+flowchart TD
+  Router[🔀 http.ServeMux<br/>createRouter]
+
+  subgraph Biz[🟦 业务端点]
+    direction LR
+    B1[🔎 WHOIS 核心]
+    B2[🌐 RDAP]
+    B3[🔍 域名分析]
+    B4[📦 批量查询]
+    B5[📝 格式化导出]
+    B6[🌍 IDN/工具]
+  end
+
+  subgraph Sys[🟩 系统端点]
+    direction LR
+    S1[📊 metrics]
+    S2[🚨 alerts]
+    S3[💚 health]
+  end
+
+  subgraph MCP[🤖 MCP 端点]
+    M1[registerMCPRoutes<br/>10 个 /api/mcp/*]
+  end
+
+  Router --> Biz
+  Router --> Sys
+  Router --> MCP
+
+  Biz --> WhoisLib[(🗄️ pkg/whois)]
+  MCP --> MCPLib[(🎛️ pkg/mcp)]
+  Biz -.启用时.-> Metrics[(📊 metrics collector)]
+  Sys -.启用时.-> Metrics
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Router,B1,B2,B3,B4,B5,B6,M1 svc
+  class S1,S2,S3 entry
+  class WhoisLib,MCPLib,Metrics infra
+```
 
 ---
 

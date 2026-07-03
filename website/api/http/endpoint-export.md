@@ -118,6 +118,35 @@ Content-Type: text/markdown
 4. 设置 `Content-Type`（CSV 额外设置 `Content-Disposition`）
 5. `w.Write(buf.Bytes())` 输出原始字节
 
+下图展示三个导出端点共享的处理流程，成功时直接返回原始字节（非 APIResponse），失败时才走错误响应封装。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /api/export/{json,csv,markdown}<br/>{domain}]) --> MW[🛡️ 中间件链]
+  MW --> V1{⚙️ 校验<br/>方法/JSON/domain?}
+  V1 -- 失败 --> E1[❌ 400/405<br/>SendErrorResponse]
+  V1 -- 通过 --> Q[🔎 whois.ExecuteQueryWithContext]
+  Q --> V2{查询成功?}
+  V2 -- 否 --> E2[❌ 500 查询失败<br/>APIResponse]
+  V2 -- 是 --> Exp[📦 whois.ExportToXxx<br/>写入 bytes.Buffer]
+  Exp --> V3{导出成功?}
+  V3 -- 否 --> E3[❌ 500 导出失败<br/>APIResponse]
+  V3 -- 是 --> CTF[🔧 设置 Content-Type<br/>CSV 额外设 Content-Disposition]
+  CTF --> Raw[✅ w.Write 原始字节<br/>非 APIResponse]
+
+  E1 & E2 & E3 & Raw --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp,Raw entry
+  class MW,Q,Exp,CTF svc
+  class V1,V2,V3 check
+  class E1,E2,E3 err
+```
+
 ---
 
 ## ❌ 错误码

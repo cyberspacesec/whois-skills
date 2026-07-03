@@ -19,6 +19,35 @@
 
 ## 🏗️ 多阶段构建
 
+镜像采用两阶段构建：builder 阶段静态编译并 UPX 压缩，运行时阶段以非 root 用户承载二进制与网站，并配置健康检查。
+
+```mermaid
+flowchart TD
+  subgraph Builder["🏗️ 第一阶段 builder (golang:1.23-alpine)"]
+    B1["📥 安装 git make"] --> B2["📦 go mod download"]
+    B2 --> B3["📂 COPY 源码"]
+    B3 --> B4["🔨 go build<br/>CGO=0 静态链接<br/>ldflags 注入版本"]
+    B4 --> B5["🗜️ UPX 压缩"]
+  end
+  subgraph Runtime["🐳 第二阶段运行时 (alpine:3.19)"]
+    R1["📥 ca-certs/tzdata/curl"] --> R2["🕒 设 Asia/Shanghai"]
+    R2 --> R3["📂 /app 工作目录"]
+    R3 --> R4["📦 复制二进制+网站"]
+    R4 --> R5["👤 appuser 非 root"]
+    R5 --> R6["💾 VOLUME /app/data"]
+    R6 --> R7["🔌 EXPOSE 8080"]
+    R7 --> R8["🏥 健康检查 curl /api/health"]
+    R8 --> R9["🚀 ENTRYPOINT + CMD"]
+  end
+  B5 --> R4
+
+  classDef build fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef run fill:#41b883,color:#fff,stroke:#2b7a4b
+
+  class B1,B2,B3,B4,B5 build
+  class R1,R2,R3,R4,R5,R6,R7,R8,R9 run
+```
+
 ### 第一阶段：builder（`golang:1.23-alpine`）
 
 | 步骤 | 说明 |

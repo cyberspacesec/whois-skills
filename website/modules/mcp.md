@@ -27,6 +27,31 @@
 
 ## 🔁 状态机
 
+Request 与 Task 双层状态机协同推进：Task 逐个完成并批准，全部 approved 后 Request 自动收尾。
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  state "🟡 Task: pending" as TPending
+  state "🔵 Task: done" as TDone
+  state "🟢 Task: approved" as TApproved
+  state "🔴 Task: failed" as TFailed
+  state "🟡 Request: pending" as RPending
+  state "🔵 Request: in_progress" as RProgress
+  state "🟢 Request: done" as RDone
+
+  [*] --> RPending: PlanRequest
+  RPending --> RProgress: GetNextTask
+  RProgress --> TPending: 分配任务
+  TPending --> TDone: MarkTaskDone
+  TPending --> TFailed: 执行异常
+  TDone --> TApproved: ApproveTaskCompletion
+  TApproved --> RProgress: 还有未批准任务
+  TApproved --> RDone: 全部任务 approved
+  RDone --> [*]
+  TFailed --> [*]
+```
+
 ### Request 状态
 
 | 状态 | 说明 |

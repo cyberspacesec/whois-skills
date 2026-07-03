@@ -61,6 +61,36 @@ Task: pending ──mark_task_done──▶ done
 - 任务 `CompletedAt` 被填写。
 - `UpdateTask` 联动：若请求内并非全部任务 `approved`，请求置为 `in_progress`。
 
+下图展示标记任务完成的处理流程与请求状态联动逻辑。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /mark_task_done<br/>{requestId, taskId, completedDetails}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ MarkTaskDone]
+  Ctrl --> V1{🔍 任务归属<br/>该请求?}
+  V1 -- 否 --> E1[❌ 任务不属于指定请求]
+  V1 -- 是 --> V2{⚙️ 任务为 pending?}
+  V2 -- 否 --> E2[❌ 状态不允许]
+  V2 -- 是 --> Upd[✏️ UpdateTask<br/>pending→done<br/>填 CompletedAt/Details]
+  Upd --> Link[🔁 请求联动检查]
+  Link --> Ck{所有任务 approved?}
+  Ck -- 是 --> RD[请求→done]
+  Ck -- 否 --> RP[请求→in_progress]
+  RD & RP --> Prog[📊 生成进度]
+  Prog --> Resp([📤 200 响应])
+  E1 & E2 --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class Req,Resp entry
+  class S,Ctrl,Upd,Link,RD,RP,Prog svc
+  class V1,V2,Ck check
+  class E1,E2 err
+```
+
 ---
 
 ## 🔗 相关

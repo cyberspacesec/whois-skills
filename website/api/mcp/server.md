@@ -51,6 +51,38 @@ router.HandleFunc("/api/mcp/request_planning", mcpServer.HandleRequestPlanning()
 
 两类方法最终都委托给内部未导出的 `handleXxx`。
 
+下图展示两套 HTTP 集成路径如何复用同一套 `handleXxx` 处理逻辑，统一经过「解码 → Controller → 响应」的处理模式。
+
+```mermaid
+flowchart TD
+  subgraph Routes[📡 两条 HTTP 路径]
+    P1[/mcp/*<br/>gorilla/mux<br/>RegisterRoutes]
+    P2[/api/mcp/*<br/>http.ServeMux<br/>HandleXxx 包装器]
+  end
+
+  P1 --> H[⚙️ handleXxx<br/>未导出]
+  P2 --> H
+
+  H --> Dec[🔧 json.Decode<br/>请求体]
+  Dec --> DCheck{解码成功?}
+  DCheck -- 否 --> E1[❌ 400 无效的请求格式]
+  DCheck -- 是 --> Ctrl[🎛️ Controller 方法]
+  Ctrl --> CCheck{返回 error?}
+  CCheck -- 是 --> E2[❌ 500 err.Error]
+  CCheck -- 否 --> OK[✅ respondJSON<br/>200 + 数据]
+  E1 & E2 & OK --> Resp([📤 HTTP 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+
+  class P1,P2 entry
+  class H,Dec,Ctrl,OK svc
+  class DCheck,CCheck check
+  class E1,E2 err
+```
+
 ---
 
 ## 🧱 HandleXxx() 包装器

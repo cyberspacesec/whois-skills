@@ -132,6 +132,30 @@ curl -X POST http://127.0.0.1:8080/api/whois \
 完整 HTTP API 列表见 [HTTP API 概览](../api/http/overview.md)。
 :::
 
+下图展示了从安装到首次查询的快速路径：
+
+```mermaid
+flowchart TD
+    A["📦 克隆仓库并 go mod tidy"] --> B{"选择集成方式?"}
+    B -->|Go 库 SDK| C["import pkg/whois<br/>调用 whois.Execute"]
+    B -->|HTTP 服务| D["make build 启动服务"]
+    D --> E["🌐 监听 127.0.0.1:8080"]
+    C --> F["✅ 拿到结构化 WhoisInfo"]
+    E --> G["POST /api/whois 查询"]
+    G --> F
+    F --> H["🎉 进入进阶场景"]
+
+    classDef start fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef action fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef done fill:#41b883,color:#fff,stroke:#2b7a4b
+    class A action
+    class B check
+    class C,D,G action
+    class E action
+    class F,H done
+```
+
 ---
 
 ## 5️⃣ 常用查询场景

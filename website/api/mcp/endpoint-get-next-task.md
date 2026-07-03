@@ -65,6 +65,31 @@ curl -X POST http://localhost:8080/api/mcp/get_next_task \
 `all_tasks_done=true` 时 `task` 字段被 `omitempty` 省略，调用方应优先判断 `all_tasks_done`。
 :::
 
+下图展示取下一个待处理任务的判定流程，无 pending 任务时返回 `all_tasks_done=true`。
+
+```mermaid
+flowchart TD
+  Req([🌐 POST /get_next_task<br/>{requestId}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ GetNextTask]
+  Ctrl --> Store[🗂️ RequestStore]
+  Store --> Find[🔍 GetNextPendingTask]
+  Find --> R{有 pending 任务?}
+  R -- 是 --> Out1[✅ 返回 task<br/>all_tasks_done=false]
+  R -- 否 nil, nil --> Out2[✅ 返回<br/>all_tasks_done=true<br/>省略 task]
+  Out1 & Out2 --> Prog[📊 生成进度信息<br/>X/Y 完成, Z/Y 已批准]
+  Prog --> Resp([📤 200 响应])
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Req,Resp entry
+  class S,Ctrl,Out1,Out2,Prog svc
+  class R check
+  class Store,Find infra
+```
+
 ---
 
 ## 🔄 状态转换

@@ -69,6 +69,32 @@ curl -X POST http://localhost:8080/api/mcp/request_planning \
                             Task:   pending (×N)
 ```
 
+下图展示请求规划端点的交互时序：生成 UUID、初始化 pending 状态并入库。
+
+```mermaid
+sequenceDiagram
+  participant C as 🌐 客户端
+  participant S as 🌐 mcp.Server
+  participant Ctrl as 🎛️ Controller
+  participant Store as 🗂️ RequestStore
+
+  C->>S: POST /request_planning {originalRequest, tasks}
+  S->>S: json.Decode 请求体
+  alt 解码失败
+    S-->>C: 400 无效的请求格式
+  else 解码成功
+    S->>Ctrl: PlanRequest(input)
+    Ctrl->>Ctrl: uuid.New() 生成 requestID
+    loop 每个 task
+      Ctrl->>Ctrl: uuid.New() 生成 taskID
+    end
+    Ctrl->>Store: AddRequest(req)<br/>初始 Request=pending, Tasks=pending
+    Store->>Store: 登记 requests + tasks 双表
+    Ctrl-->>S: {requestId, tasks, message}
+    S-->>C: 200 已创建请求并添加 N 个任务
+  end
+```
+
 ---
 
 ## 🔗 相关

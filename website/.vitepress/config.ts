@@ -1,7 +1,8 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
 // https://vitepress.dev/reference/site-config
-export default defineConfig({
+export default withMermaid(defineConfig({
   lang: 'zh-CN',
   title: 'Whois Hacker',
   titleTemplate: false,
@@ -81,8 +82,22 @@ export default defineConfig({
 
     // 侧边栏
     sidebar: sidebar()
+  },
+
+  // Mermaid 图表配置（一图抵千言）
+  mermaid: {
+    // light 主题；dark 模式下插件自动强制 dark 主题
+    theme: 'default',
+    themeVariables: {
+      primaryColor: '#41b883',
+      primaryTextColor: '#fff',
+      primaryBorderColor: '#2b7a4b',
+      lineColor: '#647eff',
+      secondaryColor: '#f0f9eb',
+      tertiaryColor: '#fafafa'
+    }
   }
-})
+}))
 
 function nav() {
   return [

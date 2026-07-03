@@ -76,6 +76,43 @@ func main() {
 
 **总分** = 三项均值。
 
+下图展示了三维评分模型的结构与扣分/加分逻辑：
+
+```mermaid
+flowchart TD
+    Info["📦 WhoisInfo"] --> Assess["⭐ AssessQuality"]
+    Assess --> C["📐 完整性 Completeness<br/>16 字段加权(权重 2-15)"]
+    Assess --> T["⏰ 时效性 Timeliness<br/>无创建50 / 有创建无更新70 / 都有90"]
+    Assess --> R["🛡️ 可信度 Reliability<br/>从 100 起扣"]
+    R --> R1["🕴️ 隐私保护<br/>扣 ProtectionLevel/2"]
+    R --> R2["📧 邮箱无效<br/>扣 5"]
+    R --> R3["📝 模板数据<br/>扣 10"]
+    C --> Total["💯 总分 = 三项均值"]
+    T --> Total
+    R --> Total
+    Total --> Level{"等级划分"}
+    Level --> L1["🟢 80-100 Excellent"]
+    Level --> L2["🟡 60-79 Good"]
+    Level --> L3["🟠 40-59 Fair"]
+    Level --> L4["🔴 0-39 Poor/Unusable"]
+
+    classDef in fill:#909399,color:#fff,stroke:#6b6e72
+    classDef act fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef dim fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef bad fill:#f56c6c,color:#fff,stroke:#c04040
+    class Info in
+    class Assess act
+    class C,T,R dim
+    class R1,R2,R3 bad
+    class Total act
+    class Level check
+    class L1 dim
+    class L2 act
+    class L3 check
+    class L4 bad
+```
+
 ---
 
 ## 4️⃣ 质量等级

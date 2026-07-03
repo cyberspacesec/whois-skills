@@ -81,6 +81,31 @@ type IPWhoisOptions struct {
 
 ## 🔍 关键实现要点
 
+`QueryIPWithContext` 通过 IANA 引导定位到对应 RIR 服务器，再发起二次查询获取详细网络信息：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Caller as 🚀 调用方
+    participant IPWhois as 📡 ipwhois.go
+    participant IANA as 🌐 whois.iana.org
+    participant RIR as 🏢 RIR 服务器
+
+    Caller->>IPWhois: QueryIPWithContext(ip)
+    IPWhois->>IANA: 查询 IP（引导）
+    IANA-->>IPWhois: 返回引导响应<br/>refer: whois.arin.net
+    IPWhois->>IPWhois: extractReferralServer<br/>提取 RIR 服务器
+    alt 提取到 RIR
+        IPWhois->>RIR: 查询 IP（详细）
+        RIR-->>IPWhois: 返回 RIR 响应
+    else 未提取到
+        IPWhois-->>Caller: 返回 IANA 响应
+    end
+    IPWhois->>IPWhois: whoisparser.Parse（通常失败）
+    IPWhois-->>Caller: IPWhoisResult{RawResponse, Server}
+    Note over Caller: 建议用 ParseIPWhois 二次解析
+```
+
 ::: details 三步查询流程
 `QueryIPWithContext` 执行以下三步：
 

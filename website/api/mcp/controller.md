@@ -131,6 +131,41 @@ type TaskDetailsOutput struct {
 进度: X/Y 完成, Z/Y 已批准
 ```
 
+下图展示 Controller 各任务管理方法如何驱动任务与请求状态流转，含失败分支与审批联动。
+
+```mermaid
+stateDiagram-v2
+  direction TB
+
+  [*] --> TaskPending : PlanRequest<br/>新建任务
+  TaskPending --> TaskDone : MarkTaskDone<br/>pending→done
+  TaskDone --> TaskApproved : ApproveTaskCompletion<br/>需先 done
+  TaskPending --> TaskFailed : 执行失败
+
+  state ReqPending : 请求 pending
+  state ReqProgress : 请求 in_progress
+  state ReqDone : 请求 done
+
+  ReqPending --> ReqProgress : 任务状态首次变更
+  ReqProgress --> ReqDone : 所有任务 approved<br/>(自动联动)
+  ReqProgress --> ReqDone : ApproveRequestCompletion<br/>显式批准
+
+  note right of TaskApproved
+    UpdateTask 联动：
+    批准最后一个任务后
+    请求自动置为 done
+  end note
+
+  note right of TaskPending
+    UpdateTask/DeleteTask
+    拒绝操作 done/approved 任务
+    AddTasks 拒绝向 done 请求追加
+  end note
+
+  TaskFailed --> [*]
+  ReqDone --> [*]
+```
+
 ---
 
 ## 🅱️ WHOIS 查询方法
@@ -247,6 +282,48 @@ case "rdap": source = whois.ASNSourceRDAP
 ```
 空值与其他值均落到 `ASNSourceAll`。
 :::
+
+下图展示 Controller 封装的 WHOIS 查询方法与 `pkg/whois` 底层能力的对应关系，统一入口对外暴露一致的方法签名。
+
+```mermaid
+flowchart LR
+  subgraph Ctrl[🎛️ Controller 查询方法]
+    M1[ExecuteWhoisQuery<br/>ExecuteWhoisQueryFull]
+    M2[ExecuteIPWhoisQuery]
+    M3[ExecuteASNQuery]
+    M4[ExecuteRDAPQuery]
+    M5[CheckAvailability]
+    M6[CompareWhoisInfo]
+    M7[AssessWhoisQuality]
+    M8[NormalizeDomainName]
+  end
+
+  subgraph Whois[🗄️ pkg/whois 能力]
+    W1[Execute/ExecuteQueryWithResult]
+    W2[QueryIPWithOptions]
+    W3[QueryASNWithContext]
+    W4[QueryRDAP*WithContext]
+    W5[CheckDomainAvailability]
+    W6[CompareWhois]
+    W7[AssessQuality]
+    W8[Normalize/UnicodeToPunycode<br/>PunycodeToUnicode]
+  end
+
+  M1 --> W1
+  M2 --> W2
+  M3 --> W3
+  M4 --> W4
+  M5 --> W5
+  M6 --> W6
+  M7 --> W7
+  M8 --> W8
+
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class M1,M2,M3,M4,M5,M6,M7,M8 svc
+  class W1,W2,W3,W4,W5,W6,W7,W8 infra
+```
 
 ---
 

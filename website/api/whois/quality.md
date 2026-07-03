@@ -128,6 +128,48 @@ type PrivacyDetection struct {
 
 ## 🔍 关键实现要点
 
+`AssessQuality` 从完整性、时效性、可信度三个维度独立评分，取均值后映射为质量等级：
+
+```mermaid
+flowchart TD
+    In(["📊 WhoisInfo"])
+    C["📦 assessCompleteness<br/>16 字段加权(2-15)"]
+    T["⏱️ assessTimeliness<br/>创建/更新日期"]
+    R["🔒 assessReliability<br/>隐私/邮箱/模板"]
+    Avg["🧮 Total = 三项均值"]
+    Det{"📊 分数区间?"}
+    Excel["🟢 Excellent 80-100"]
+    Good["🟩 Good 60-79"]
+    Fair["🟨 Fair 40-59"]
+    Poor["🟧 Poor 20-39"]
+    Unus["🔴 Unusable 0-19"]
+    Priv["🕵️ detectPrivacy<br/>13规则+12后缀+11关键词"]
+    Out(["✅ QualityScore"])
+
+    In --> C & T & R
+    C --> Avg
+    T --> Avg
+    R --> Avg
+    Avg --> Det
+    Det -- 80-100 --> Excel
+    Det -- 60-79 --> Good
+    Det -- 40-59 --> Fair
+    Det -- 20-39 --> Poor
+    Det -- 0-19 --> Unus
+    In --> Priv
+    Excel & Good & Fair & Poor & Unus --> Out
+    Priv --> Out
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class In,Out entry
+    class C,T,R,Avg,Priv,Excel,Good,Fair service
+    class Det check
+    class Poor,Unus fail
+```
+
 ::: details AssessQuality 主流程
 1. **assessCompleteness** — 检查 16 个字段，按权重（2-15）加权评分
 2. **assessTimeliness** — 时效性评分

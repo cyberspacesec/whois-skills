@@ -71,6 +71,25 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 健康检查端点不依赖任何功能开关（`EnableMetrics` / `EnableAlerts` 均无需开启），始终可用，适合作为存活探针。
 :::
 
+下图展示 health 端点作为容器编排存活探针的交互时序，无前置条件、始终返回 200。
+
+```mermaid
+sequenceDiagram
+  participant D as 🐳 Docker/LB
+  participant MW as 🛡️ 中间件链
+  participant H as 💚 handleHealth
+
+  loop 定期探测（interval=30s）
+    D->>MW: GET /api/health
+    MW->>MW: Recovery→Logging→CORS→Auth
+    MW->>H: 转发
+    H->>H: 直接构造 {status:ok, time:now}
+    H-->>MW: 200 响应
+    MW-->>D: 200 OK
+    Note over D: 探测成功，容器标记 healthy
+  end
+```
+
 ---
 
 ## 🔗 相关

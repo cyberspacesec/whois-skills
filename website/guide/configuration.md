@@ -6,8 +6,24 @@
 
 ## 🎯 配置优先级
 
-```
-命令行 flag > YAML 配置文件 > flag 默认值
+```mermaid
+flowchart LR
+    Flag["🚩 命令行 flag<br/>(显式设置)"]
+    YAML["📄 YAML 配置文件"]
+    Def["🔕 flag 默认值"]
+
+    Flag -->|"优先级最高"| Merge{"最终生效值"}
+    YAML -->|"flag 未显式设置时覆盖"| Merge
+    Def -->|"兜底"| Merge
+
+    classDef hi fill:#f56c6c,color:#fff,stroke:#c04040
+    classDef mid fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef lo fill:#909399,color:#fff,stroke:#6b6e72
+    classDef out fill:#41b883,color:#fff,stroke:#2b7a4b
+    class Flag hi
+    class YAML mid
+    class Def lo
+    class Merge out
 ```
 
 `main.go` 通过 `flag.Visit`（只遍历已显式设置的 flag）实现优先级判断：命令行未显式设置的字段才会被 YAML 值覆盖。
@@ -120,6 +136,39 @@ alerts:
 | 📝 日志 | `WhoisLogConfig` | Level/Format/OutputFile |
 
 ### 加载库配置
+
+```mermaid
+flowchart TD
+    M1["方式 1：默认值<br/>DefaultWhoisLibraryConfig()"]
+    M2["方式 2：从文件加载<br/>LoadWhoisLibraryConfigFromFile"]
+    M3["方式 3：全局单例<br/>GetWhoisLibraryConfig"]
+
+    Env{"WHOIS_CONFIG_FILE<br/>环境变量?"}
+    Env -- 已设置 --> LoadFile["读取该路径文件"]
+    Env -- 未设置 --> BuiltIn["内置默认值"]
+
+    M2 --> Parse["按扩展名选 JSON/YAML"]
+    LoadFile --> Parse
+    BuiltIn --> Validate
+
+    M1 --> Tune["调整字段<br/>cfg.Query.Timeout=30"]
+    Parse --> Validate["ValidateWhoisLibraryConfig<br/>校验合理范围"]
+    Tune --> Validate
+
+    Validate --> Apply["ApplyWhoisLibraryConfig<br/>先校验再应用"]
+    Apply --> Singleton[("全局单例<br/>各子系统读取")]
+
+    M3 --> Singleton
+
+    classDef way fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef proc fill:#909399,color:#fff,stroke:#6b6e72
+    classDef store fill:#41b883,color:#fff,stroke:#2b7a4b
+    class M1,M2,M3 way
+    class Env,Validate check
+    class LoadFile,BuiltIn,Parse,Tune,Apply proc
+    class Singleton store
+```
 
 ```go
 // 方式 1：默认值

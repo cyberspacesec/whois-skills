@@ -53,6 +53,36 @@ whois.ExportToMarkdown(info, os.Stdout)
 
 ## 🔍 关键实现要点
 
+三个导出函数共享同一份 `WhoisInfo`，按格式分派到不同写入器：
+
+```mermaid
+flowchart LR
+    Info(["📊 WhoisInfo"])
+    Nil{"✅ info == nil?"}
+    Err(["❌ 返回错误"])
+    Disp["🔀 按格式分派"]
+    JSON["🟦 ExportToJSON<br/>json.MarshalIndent 2空格"]
+    CSV["🟩 ExportToCSV<br/>Field,Value 两列"]
+    MD["🟨 ExportToMarkdown<br/>中文标题表格"]
+    W["📝 io.Writer 流式写入"]
+
+    Info --> Nil
+    Nil -- 是 --> Err
+    Nil -- 否 --> Disp
+    Disp --> JSON & CSV & MD
+    JSON --> W
+    CSV --> W
+    MD --> W
+
+    classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef service fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef fail fill:#f56c6c,color:#fff,stroke:#c04040
+    class Info,Err entry
+    class JSON,CSV,MD,W service
+    class Nil,Disp check
+```
+
 ::: details ExportToJSON
 使用 `json.MarshalIndent` 生成缩进 2 空格的 JSON，直接写入 `io.Writer`。结构体字段保持 `WhoisInfo` 的原始 JSON tag。
 :::

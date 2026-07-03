@@ -54,6 +54,33 @@ curl -X POST http://localhost:8080/api/mcp/open_task_details \
 - `completed_at` 与 `details` 均带 `omitempty`，未完成时不出现。
 - 直接返回 store 中的 `*Task` 指针序列化结果。
 
+下图展示任务详情端点的只读查询流程，按 taskID 从全局映射表 O(1) 取任务。
+
+```mermaid
+flowchart LR
+  Req([🌐 POST /open_task_details<br/>{taskId}]) --> S[🌐 mcp.Server]
+  S --> Ctrl[🎛️ GetTaskDetails]
+  Ctrl --> Store[🗂️ RequestStore.tasks<br/>全局映射表]
+  Store --> Find{🔍 taskID 存在?}
+  Find -- 否 --> E[❌ 任务不存在]
+  Find -- 是 --> T[📌 *Task 指针]
+  T --> Ser[🔧 序列化<br/>omitempty 处理可选字段]
+  Ser --> Resp([✅ 200 返回 task 详情])
+  E --> Resp
+
+  classDef entry fill:#41b883,color:#fff,stroke:#2b7a4b
+  classDef svc fill:#647eff,color:#fff,stroke:#4a5fd6
+  classDef check fill:#e6a23c,color:#fff,stroke:#b7821c
+  classDef err fill:#f56c6c,color:#fff,stroke:#c04040
+  classDef infra fill:#909399,color:#fff,stroke:#6b6e72
+
+  class Req,Resp entry
+  class S,Ctrl,T,Ser svc
+  class Find check
+  class E err
+  class Store infra
+```
+
 ---
 
 ## 🔄 状态转换
