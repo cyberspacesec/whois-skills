@@ -112,6 +112,7 @@ function nav() {
       ]
     },
     { text: '🔧 模块', link: '/modules/overview' },
+    { text: '💻 CLI', link: '/cli/overview' },
     { text: '🚀 部署', link: '/deploy/docker' },
     {
       text: '🌐',
@@ -160,6 +161,7 @@ function sidebar() {
     '/api/http/': sidebarHttp(),
     '/api/mcp/': sidebarMcp(),
     '/modules/': sidebarModules(),
+    '/cli/': sidebarCli(),
     '/deploy/': sidebarDeploy(),
     '/reference/': sidebarReference()
   }
@@ -284,6 +286,26 @@ function sidebarModules() {
         { text: '👁️ monitor', link: '/modules/monitor' },
         { text: '🔒 security', link: '/modules/security' },
         { text: '⚙️ cmd', link: '/modules/cmd' }
+      ]
+    }
+  ]
+}
+
+function sidebarCli() {
+  return [
+    {
+      text: '💻 命令行手册',
+      collapsed: false,
+      items: [
+        { text: '📖 CLI 总览', link: '/cli/overview' },
+        { text: '🚀 启动与运行', link: '/cli/usage' },
+        { text: '🚩 命令行参数', link: '/cli/flags' },
+        { text: '⚙️ 配置文件', link: '/cli/config-file' },
+        { text: '📝 日志与输出', link: '/cli/logging' },
+        { text: '🛑 优雅关闭与信号', link: '/cli/signals' },
+        { text: '🐳 Docker 命令', link: '/cli/docker' },
+        { text: '🤖 AI 集成示例', link: '/cli/ai-examples' },
+        { text: '❓ 常见问题', link: '/cli/faq' }
       ]
     }
   ]
