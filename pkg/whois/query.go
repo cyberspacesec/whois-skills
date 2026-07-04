@@ -233,6 +233,85 @@ func ExecuteQueryWithContext(ctx context.Context, q *QueryOptions) (*whoisparser
 	return result.Info, nil
 }
 
+// executeReferralQuery 向 registrar WHOIS 服务器发起二次查询。
+// referralServer 为 registry 返回的 registrar WHOIS 服务器（如 whois.markmonitor.com）。
+func executeReferralQuery(ctx context.Context, q *QueryOptions, referralServer string) (*QueryResult, error) {
+	maxReferrals := q.GetMaxReferralsOrDefault()
+	if maxReferrals <= 0 {
+		return nil, fmt.Errorf("MaxReferrals 为 0，跳过 referral")
+	}
+
+	// referral 查询使用独立子上下文，避免占用主查询超时
+	referralCtx, cancel := context.WithTimeout(ctx, time.Duration(q.Timeout)*time.Second)
+	defer cancel()
+
+	startTime := time.Now()
+	result := &QueryResult{
+		QueryTime: startTime,
+		Server:    referralServer,
+		UsedProxy: q.UseProxy,
+	}
+
+	rawResponse, err := GetWhoisQueryProvider().Query(referralCtx, q.Domain, referralServer, q.UseProxy)
+	if err != nil {
+		return nil, NewWhoisError(ErrReferralFailed, fmt.Sprintf("referral 查询失败 [%s]", referralServer), err)
+	}
+	result.RawResponse = rawResponse
+
+	info, err := GetWhoisQueryProvider().Parse(rawResponse)
+	if err != nil {
+		return nil, NewWhoisError(ErrParseFailed, "referral WHOIS 解析失败", err)
+	}
+	result.Info = &info
+	result.Latency = time.Since(startTime).Milliseconds()
+	return result, nil
+}
+
+// mergeWhoisInfo 将 registrar 查询结果合并到 registry 结果中。
+// registrar 通常包含更完整的联系人/状态信息，优先使用 registrar 值。
+func mergeWhoisInfo(base *whoisparser.WhoisInfo, override *QueryResult) {
+	if base == nil || override == nil || override.Info == nil {
+		return
+	}
+	bi := base
+	oi := override.Info
+
+	// Domain 字段：registrar 通常更准确
+	if oi.Domain != nil {
+		if bi.Domain == nil {
+			bi.Domain = oi.Domain
+		} else {
+			// 状态、NS 等用 registrar 的
+			if len(oi.Domain.Status) > 0 {
+				bi.Domain.Status = oi.Domain.Status
+			}
+			if len(oi.Domain.NameServers) > 0 {
+				bi.Domain.NameServers = oi.Domain.NameServers
+			}
+			if oi.Domain.UpdatedDate != "" {
+				bi.Domain.UpdatedDate = oi.Domain.UpdatedDate
+			}
+		}
+	}
+
+	// 联系人字段：registrar 提供 registrant/admin/tech
+	if oi.Registrar != nil {
+		bi.Registrar = oi.Registrar
+	}
+	if oi.Registrant != nil {
+		bi.Registrant = oi.Registrant
+	}
+	if oi.Administrative != nil {
+		bi.Administrative = oi.Administrative
+	}
+	if oi.Technical != nil {
+		bi.Technical = oi.Technical
+	}
+	if oi.Billing != nil {
+		bi.Billing = oi.Billing
+	}
+}
+
 // ExecuteQueryWithResultContext 使用上下文执行WHOIS查询，返回完整的查询结果
 func ExecuteQueryWithResultContext(ctx context.Context, q *QueryOptions) (*QueryResult, error) {
 	if q == nil {
@@ -303,6 +382,18 @@ func ExecuteQueryWithResultContext(ctx context.Context, q *QueryOptions) (*Query
 			return nil, NewWhoisError(ErrParseFailed, "WHOIS信息解析失败", err)
 		}
 		result.Info = &info
+
+		// Follow referral：若 registry 返回 Registrar Whois Server，向 registrar 二次查询
+		if q.FollowReferral && info.Domain != nil && info.Domain.WhoisServer != "" && info.Domain.WhoisServer != server {
+			registrarResult, err := executeReferralQuery(ctx, q, info.Domain.WhoisServer)
+			if err != nil {
+				logrus.Warnf("Referral 查询失败: %v", err)
+			} else if registrarResult != nil {
+				// 合并 registrar 结果（优先使用 registrar 的完整信息）
+				mergeWhoisInfo(result.Info, registrarResult)
+				result.RawResponse += "\n\n--- Registrar WHOIS ---\n" + registrarResult.RawResponse
+			}
+		}
 
 		// 计算查询延迟
 		result.Latency = time.Since(startTime).Milliseconds()
