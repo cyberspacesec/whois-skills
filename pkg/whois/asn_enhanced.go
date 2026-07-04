@@ -197,6 +197,9 @@ func QueryASNWithContext(ctx context.Context, opts *ASNQueryOptions) (*ASNDetail
 		return nil, fmt.Errorf("不支持的查询来源: %s", opts.Source)
 	}
 
+	// 补充 BGP 关系（若启用）
+	queryASNRelations(ctx, opts, info)
+
 	// 缓存结果
 	asnDetailCache.mu.Lock()
 	asnDetailCache.items[opts.ASN] = info

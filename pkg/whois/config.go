@@ -43,6 +43,9 @@ type WhoisLibraryConfig struct {
 	// 持久化存储配置（让上层把 WHOIS 数据落本地/Redis/ES 等）
 	Storage StorageConfig `json:"storage"`
 
+	// ASN BGP 关系查询配置（上游/下游/对等 AS）
+	ASNRelation ASNRelationConfig `json:"asn_relation"`
+
 	// 日志配置
 	Log WhoisLogConfig `json:"log"`
 }
@@ -307,6 +310,11 @@ func DefaultWhoisLibraryConfig() WhoisLibraryConfig {
 				PoolSize: 10,
 			},
 		},
+		ASNRelation: ASNRelationConfig{
+			Enabled:  false,
+			Type:     "local",
+			FilePath: "data/as-rel.txt",
+		},
 		Log: WhoisLogConfig{
 			Level:  "info",
 			Format: "text",
@@ -546,6 +554,13 @@ func ValidateWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 校验 AS 关系配置
+	if cfg.ASNRelation.Enabled {
+		if cfg.ASNRelation.Type != "local" && cfg.ASNRelation.Type != "api" {
+			return fmt.Errorf("AS 关系数据源类型必须是 local 或 api，当前: %s", cfg.ASNRelation.Type)
+		}
+	}
+
 	return nil
 }
 
@@ -577,6 +592,15 @@ func ApplyWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 初始化 ASN BGP 关系数据源（如启用）
+	if cfg.ASNRelation.Enabled {
+		if err := InitASNRelationFromConfig(&cfg.ASNRelation); err != nil {
+			logrus.Warnf("初始化 AS 关系数据源失败: %v", err)
+		} else {
+			logrus.Infof("AS 关系查询已启用: 类型=%s", cfg.ASNRelation.Type)
+		}
+	}
+
 	logrus.Infof("配置已应用: 查询超时=%ds, 缓存=%v, 限流=%v",
 		cfg.Query.Timeout, cfg.Cache.Enabled, cfg.RateLimit.Enabled)
 
@@ -596,7 +620,8 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 			"批量: concurrency=%d | "+
 			"监控: enabled=%v | "+
 			"调度: interval=%dms | "+
-			"存储: enabled=%v type=%s",
+			"存储: enabled=%v type=%s | "+
+			"ASN关系: enabled=%v type=%s",
 		cfg.Query.Timeout, cfg.Query.MaxRetries, cfg.Query.UseProxy,
 		cfg.Cache.Enabled, cfg.Cache.Type, cfg.Cache.DefaultTTLMinutes,
 		cfg.RateLimit.Enabled, cfg.RateLimit.GlobalRate,
@@ -604,6 +629,7 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 		cfg.Monitor.Enabled,
 		cfg.Scheduler.DefaultIntervalMs,
 		cfg.Storage.Enabled, cfg.Storage.Type,
+		cfg.ASNRelation.Enabled, cfg.ASNRelation.Type,
 	)
 }
 
