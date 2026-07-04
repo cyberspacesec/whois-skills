@@ -46,6 +46,9 @@ type WhoisLibraryConfig struct {
 	// ASN BGP 关系查询配置（上游/下游/对等 AS）
 	ASNRelation ASNRelationConfig `json:"asn_relation"`
 
+	// 历史 WHOIS 快照配置
+	History HistoryConfig `json:"history"`
+
 	// 日志配置
 	Log WhoisLogConfig `json:"log"`
 }
@@ -315,6 +318,12 @@ func DefaultWhoisLibraryConfig() WhoisLibraryConfig {
 			Type:     "local",
 			FilePath: "data/as-rel.txt",
 		},
+		History: HistoryConfig{
+			Enabled:          false,
+			Type:             "local",
+			Directory:        "data/history",
+			MaxRetentionDays: 365,
+		},
 		Log: WhoisLogConfig{
 			Level:  "info",
 			Format: "text",
@@ -561,6 +570,13 @@ func ValidateWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 校验历史快照配置
+	if cfg.History.Enabled {
+		if cfg.History.Type != "local" && cfg.History.Type != "custom" {
+			return fmt.Errorf("历史存储类型必须是 local 或 custom，当前: %s", cfg.History.Type)
+		}
+	}
+
 	return nil
 }
 
@@ -601,6 +617,15 @@ func ApplyWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 初始化历史 WHOIS 快照存储（如启用）
+	if cfg.History.Enabled {
+		if err := InitHistoryFromConfig(&cfg.History); err != nil {
+			logrus.Warnf("初始化历史快照存储失败: %v", err)
+		} else {
+			logrus.Infof("历史快照已启用: 类型=%s", cfg.History.Type)
+		}
+	}
+
 	logrus.Infof("配置已应用: 查询超时=%ds, 缓存=%v, 限流=%v",
 		cfg.Query.Timeout, cfg.Cache.Enabled, cfg.RateLimit.Enabled)
 
@@ -621,7 +646,8 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 			"监控: enabled=%v | "+
 			"调度: interval=%dms | "+
 			"存储: enabled=%v type=%s | "+
-			"ASN关系: enabled=%v type=%s",
+			"ASN关系: enabled=%v type=%s | "+
+			"历史: enabled=%v type=%s",
 		cfg.Query.Timeout, cfg.Query.MaxRetries, cfg.Query.UseProxy,
 		cfg.Cache.Enabled, cfg.Cache.Type, cfg.Cache.DefaultTTLMinutes,
 		cfg.RateLimit.Enabled, cfg.RateLimit.GlobalRate,
@@ -630,6 +656,7 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 		cfg.Scheduler.DefaultIntervalMs,
 		cfg.Storage.Enabled, cfg.Storage.Type,
 		cfg.ASNRelation.Enabled, cfg.ASNRelation.Type,
+		cfg.History.Enabled, cfg.History.Type,
 	)
 }
 
