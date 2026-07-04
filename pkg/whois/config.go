@@ -40,6 +40,9 @@ type WhoisLibraryConfig struct {
 	// 可观测性配置
 	Observability WhoisObservabilityConfig `json:"observability"`
 
+	// 持久化存储配置（让上层把 WHOIS 数据落本地/Redis/ES 等）
+	Storage StorageConfig `json:"storage"`
+
 	// 日志配置
 	Log WhoisLogConfig `json:"log"`
 }
@@ -294,6 +297,16 @@ func DefaultWhoisLibraryConfig() WhoisLibraryConfig {
 			PrometheusPath: "/metrics",
 			PrometheusPort: 9090,
 		},
+		Storage: StorageConfig{
+			Enabled:   false,
+			Type:      "local",
+			Directory: "data/storage",
+			RedisConfig: &RedisConfig{
+				Addr:     "localhost:6379",
+				DB:       0,
+				PoolSize: 10,
+			},
+		},
 		Log: WhoisLogConfig{
 			Level:  "info",
 			Format: "text",
@@ -520,6 +533,19 @@ func ValidateWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		return fmt.Errorf("调度器默认间隔必须大于0，当前: %d", cfg.Scheduler.DefaultIntervalMs)
 	}
 
+	// 校验持久化存储配置
+	if cfg.Storage.Enabled {
+		if cfg.Storage.Type != "local" && cfg.Storage.Type != "redis" {
+			return fmt.Errorf("存储类型必须是 local 或 redis，当前: %s", cfg.Storage.Type)
+		}
+		if cfg.Storage.Type == "local" && cfg.Storage.Directory == "" {
+			// 允许空，会使用默认目录
+		}
+		if cfg.Storage.Type == "redis" && cfg.Storage.RedisConfig == nil {
+			return fmt.Errorf("Redis 存储必须提供 RedisConfig")
+		}
+	}
+
 	return nil
 }
 
@@ -542,6 +568,15 @@ func ApplyWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		logrus.SetFormatter(&logrus.TextFormatter{})
 	}
 
+	// 初始化持久化存储（如启用）
+	if cfg.Storage.Enabled {
+		if err := InitStorageFromConfig(&cfg.Storage); err != nil {
+			logrus.Warnf("初始化存储失败: %v", err)
+		} else {
+			logrus.Infof("存储已启用: 类型=%s", cfg.Storage.Type)
+		}
+	}
+
 	logrus.Infof("配置已应用: 查询超时=%ds, 缓存=%v, 限流=%v",
 		cfg.Query.Timeout, cfg.Cache.Enabled, cfg.RateLimit.Enabled)
 
@@ -560,13 +595,15 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 			"限流: enabled=%v rate=%.1f/s | "+
 			"批量: concurrency=%d | "+
 			"监控: enabled=%v | "+
-			"调度: interval=%dms",
+			"调度: interval=%dms | "+
+			"存储: enabled=%v type=%s",
 		cfg.Query.Timeout, cfg.Query.MaxRetries, cfg.Query.UseProxy,
 		cfg.Cache.Enabled, cfg.Cache.Type, cfg.Cache.DefaultTTLMinutes,
 		cfg.RateLimit.Enabled, cfg.RateLimit.GlobalRate,
 		cfg.Batch.Concurrency,
 		cfg.Monitor.Enabled,
 		cfg.Scheduler.DefaultIntervalMs,
+		cfg.Storage.Enabled, cfg.Storage.Type,
 	)
 }
 
