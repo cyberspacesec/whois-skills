@@ -285,8 +285,8 @@ func ExecuteQueryWithResultContext(ctx context.Context, q *QueryOptions) (*Query
 		}
 		result.Server = server
 
-		// 执行查询
-		rawResponse, err := executeQueryWithTimeout(ctx, q, server)
+		// 执行查询（走全局 WhoisQueryProvider，默认为 likexian 实现，可注入自定义）
+		rawResponse, err := GetWhoisQueryProvider().Query(ctx, q.Domain, server, q.UseProxy)
 		if err != nil {
 			lastErr = err
 			if isRetryableError(err) {
@@ -296,8 +296,8 @@ func ExecuteQueryWithResultContext(ctx context.Context, q *QueryOptions) (*Query
 		}
 		result.RawResponse = rawResponse
 
-		// 解析WHOIS信息
-		info, err := whoisparser.Parse(rawResponse)
+		// 解析WHOIS信息（走全局 provider 的 Parse，默认为 whois-parser）
+		info, err := GetWhoisQueryProvider().Parse(rawResponse)
 		if err != nil {
 			// 解析错误一般不可重试
 			return nil, NewWhoisError(ErrParseFailed, "WHOIS信息解析失败", err)
