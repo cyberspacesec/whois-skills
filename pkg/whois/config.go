@@ -49,6 +49,12 @@ type WhoisLibraryConfig struct {
 	// 历史 WHOIS 快照配置
 	History HistoryConfig `json:"history"`
 
+	// 告警持久化配置
+	AlertStorage AlertStorageConfig `json:"alert_storage"`
+
+	// 监控状态持久化配置
+	MonitorState MonitorStateConfig `json:"monitor_state"`
+
 	// 日志配置
 	Log WhoisLogConfig `json:"log"`
 }
@@ -324,6 +330,16 @@ func DefaultWhoisLibraryConfig() WhoisLibraryConfig {
 			Directory:        "data/history",
 			MaxRetentionDays: 365,
 		},
+		AlertStorage: AlertStorageConfig{
+			Enabled:   false,
+			Type:      "local",
+			Directory: "data/alerts",
+		},
+		MonitorState: MonitorStateConfig{
+			Enabled:   false,
+			Type:      "local",
+			Directory: "data/monitor",
+		},
 		Log: WhoisLogConfig{
 			Level:  "info",
 			Format: "text",
@@ -577,6 +593,20 @@ func ValidateWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 校验告警存储配置
+	if cfg.AlertStorage.Enabled {
+		if cfg.AlertStorage.Type != "local" && cfg.AlertStorage.Type != "redis" {
+			return fmt.Errorf("告警存储类型必须是 local 或 redis，当前: %s", cfg.AlertStorage.Type)
+		}
+	}
+
+	// 校验监控状态配置
+	if cfg.MonitorState.Enabled {
+		if cfg.MonitorState.Type != "local" && cfg.MonitorState.Type != "redis" {
+			return fmt.Errorf("监控状态存储类型必须是 local 或 redis，当前: %s", cfg.MonitorState.Type)
+		}
+	}
+
 	return nil
 }
 
@@ -626,6 +656,24 @@ func ApplyWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 初始化告警持久化（如启用）
+	if cfg.AlertStorage.Enabled {
+		if err := InitAlertStorageFromConfig(&cfg.AlertStorage); err != nil {
+			logrus.Warnf("初始化告警存储失败: %v", err)
+		} else {
+			logrus.Infof("告警持久化已启用: 类型=%s", cfg.AlertStorage.Type)
+		}
+	}
+
+	// 初始化监控状态持久化（如启用）
+	if cfg.MonitorState.Enabled {
+		if err := InitMonitorStateFromConfig(&cfg.MonitorState); err != nil {
+			logrus.Warnf("初始化监控状态存储失败: %v", err)
+		} else {
+			logrus.Infof("监控状态持久化已启用: 类型=%s", cfg.MonitorState.Type)
+		}
+	}
+
 	logrus.Infof("配置已应用: 查询超时=%ds, 缓存=%v, 限流=%v",
 		cfg.Query.Timeout, cfg.Cache.Enabled, cfg.RateLimit.Enabled)
 
@@ -647,7 +695,9 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 			"调度: interval=%dms | "+
 			"存储: enabled=%v type=%s | "+
 			"ASN关系: enabled=%v type=%s | "+
-			"历史: enabled=%v type=%s",
+			"历史: enabled=%v type=%s | "+
+			"告警存储: enabled=%v | "+
+			"监控状态: enabled=%v",
 		cfg.Query.Timeout, cfg.Query.MaxRetries, cfg.Query.UseProxy,
 		cfg.Cache.Enabled, cfg.Cache.Type, cfg.Cache.DefaultTTLMinutes,
 		cfg.RateLimit.Enabled, cfg.RateLimit.GlobalRate,
@@ -657,6 +707,8 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 		cfg.Storage.Enabled, cfg.Storage.Type,
 		cfg.ASNRelation.Enabled, cfg.ASNRelation.Type,
 		cfg.History.Enabled, cfg.History.Type,
+		cfg.AlertStorage.Enabled,
+		cfg.MonitorState.Enabled,
 	)
 }
 

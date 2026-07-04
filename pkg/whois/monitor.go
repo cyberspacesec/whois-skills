@@ -451,6 +451,11 @@ func (m *DomainMonitor) checkDomain(ctx context.Context, domain string) {
 		state.Status = WatchStatusChanged
 	}
 
+	// 持久化监控状态
+	if err := SaveWatchState(context.Background(), state); err != nil {
+		logrus.Warnf("监控状态持久化失败: %v", err)
+	}
+
 	// 发送告警
 	for _, alert := range alerts {
 		m.emitAlert(alert)
@@ -503,8 +508,13 @@ func (m *DomainMonitor) createExpiryAlert(domain string, status WatchStatus, day
 	return alert
 }
 
-// emitAlert 发送告警
+// emitAlert 发送告警（若全局 AlertStorageProvider 已注入则先持久化）。
 func (m *DomainMonitor) emitAlert(alert *DomainAlert) {
+	// 持久化告警
+	if err := SaveAlert(context.Background(), alert); err != nil {
+		logrus.Warnf("告警持久化失败: %v", err)
+	}
+
 	if m.alertCallback != nil {
 		m.alertCallback(alert)
 	}
