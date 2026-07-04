@@ -56,10 +56,30 @@ func TestRootCommandStructure(t *testing.T) {
 		"serve", "version", "whois", "ip", "asn", "rdap",
 		"availability", "diff", "quality", "correlation",
 		"batch", "idn", "format", "export", "servers",
+		"config", "cache", "proxy", "metrics", "tools",
 	}
 	for _, name := range expected {
 		_, _, err := root.Find([]string{name})
 		assert.NoErrorf(t, err, "根命令应包含子命令 %s", name)
+	}
+
+	// 验证关键子命令组内的子命令
+	subChecks := map[string][]string{
+		"config":      {"show", "validate", "save", "merge", "apply"},
+		"cache":       {"stats", "get", "delete", "clear", "clear-expired", "asn"},
+		"proxy":       {"list", "stats", "set"},
+		"metrics":     {"stats", "export"},
+		"tools":       {"ip-parse", "domain", "tld", "normalize", "asn-prefixes", "asn-ip-ranges"},
+		"servers":     {"list", "stats", "discover", "refresh", "save"},
+		"rdap":        {"domain", "ip", "asn", "entity", "bootstrap"},
+		"correlation": {"analyze", "profile", "registrars"},
+		"batch":       {"resume"},
+	}
+	for parent, children := range subChecks {
+		for _, child := range children {
+			_, _, err := root.Find([]string{parent, child})
+			assert.NoErrorf(t, err, "%s 应包含子命令 %s", parent, child)
+		}
 	}
 }
 

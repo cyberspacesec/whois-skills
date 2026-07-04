@@ -171,8 +171,54 @@ func newRDAPCmd() *cobra.Command {
 		newRDAPIPCmd(),
 		newRDAPASNCmd(),
 		newRDAPEntityCmd(),
+		newRDAPBootstrapCmd(),
 	)
 	return rdapCmd
+}
+
+// newRDAPBootstrapCmd 查看 RDAP bootstrap 映射（TLD/ASN → RDAP 服务器）。
+func newRDAPBootstrapCmd() *cobra.Command {
+	var (
+		tld string
+		asn string
+	)
+	c := &cobra.Command{
+		Use:   "bootstrap",
+		Short: "查看 RDAP bootstrap 映射（TLD/ASN → RDAP 服务器）",
+		Long: `查看 RDAP bootstrap 映射，不发起 RDAP 查询，仅返回元数据。
+
+  --tld <tld>   查看指定 TLD 的 RDAP 服务器
+  --asn <asn>   查看指定 ASN 的 RDAP 服务器（如 13335 或 AS13335）
+
+示例：
+  whois-hacker rdap bootstrap --tld com
+  whois-hacker rdap bootstrap --asn 13335`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b := whois.GetRDAPBootstrap()
+
+			if tld == "" && asn == "" {
+				return fmt.Errorf("请用 --tld 或 --asn 指定查询项")
+			}
+
+			result := map[string]string{}
+			if tld != "" {
+				result["tld"] = tld
+				result["rdap_server"] = b.GetDNSServer(tld)
+			}
+			if asn != "" {
+				asnInt, err := whois.ParseASNString(asn)
+				if err != nil {
+					return fmt.Errorf("无效 ASN: %w", err)
+				}
+				result["asn"] = asn
+				result["rdap_server"] = b.GetASN_RDAPServer(asnInt)
+			}
+			return outputJSON(result)
+		},
+	}
+	c.Flags().StringVar(&tld, "tld", "", "按 TLD 查看 RDAP 服务器")
+	c.Flags().StringVar(&asn, "asn", "", "按 ASN 查看 RDAP 服务器")
+	return c
 }
 
 func newRDAPDomainCmd() *cobra.Command {

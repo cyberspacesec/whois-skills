@@ -1,6 +1,6 @@
 # 🚩 命令行参数
 
-> 📋 `whois-hacker` 基于 `cobra` 的子命令结构：一组**全局持久 flag** 被所有子命令继承，另有各子命令的**专属 flag**。本页按"全局 → serve → 各查询子命令"分组详解。
+> 📋 `whois-hacker` 基于 `cobra` 的子命令结构：一组**全局持久 flag** 被所有子命令继承，另有各子命令的**专属 flag**。本页按"全局 → serve → 各查询子命令 → 运维子命令组"分组详解。
 
 ::: tip 🤖 给 AI 速查
 本页是机器可读友好的参数参考。所有 flag 为 cobra 风格：`--name value` 或 `--name=value`，布尔 flag 可用 `--name`（开）或 `--name=false`（关）。全局 flag 可放在子命令**前或后**，例如 `whois-hacker --log-level debug whois x.com` 与 `whois-hacker whois x.com --log-level debug` 等价。
@@ -14,16 +14,21 @@ whois-hacker
 ├── whois <domain>  # 域名 WHOIS
 ├── ip <ip>         # IP WHOIS
 ├── asn <asn>       # ASN 查询
-├── rdap            # RDAP 父命令（domain/ip/asn/entity）
+├── rdap            # RDAP 父命令（domain/ip/asn/entity/bootstrap）
 ├── availability    # 可注册性
 ├── diff            # 差异对比
 ├── quality         # 质量评分
-├── correlation     # 关联分析
-├── batch <file>    # 批量查询
+├── correlation     # 关联分析（analyze/profile/registrars）
+├── batch <file>    # 批量查询（含 resume --checkpoint）
 ├── idn             # IDN 转换
 ├── format          # 格式检测
 ├── export          # 导出
-├── servers         # 服务器列表
+├── servers         # 服务器映射（list/stats/discover/refresh/save）
+├── config          # 库配置管理（show/validate/save/merge/apply）
+├── cache           # 缓存运维（stats/get/delete/clear/clear-expired + asn）
+├── proxy           # 代理池运维（list/stats/set）
+├── metrics         # 指标查看与导出（stats/export）
+├── tools           # 本地解析工具（ip-parse/domain/tld/normalize/asn-prefixes/asn-ip-ranges）
 └── completion      # shell 自动补全
 ```
 :::
@@ -331,7 +336,7 @@ ASN 查询。
 ./bin/whois-hacker asn 15169 --source all --include-prefixes --include-bgp
 ```
 
-### `rdap`（父命令，含 domain/ip/asn/entity 子命令）
+### `rdap`（父命令，含 domain/ip/asn/entity/bootstrap 子命令）
 
 RDAP 标准查询，无专属 flag，使用全局 `--format` 控制输出。
 
@@ -340,22 +345,77 @@ RDAP 标准查询，无专属 flag，使用全局 `--format` 控制输出。
 ./bin/whois-hacker rdap entity handle-xyz
 ```
 
+#### `rdap bootstrap`
+
+查看 RDAP bootstrap 映射（TLD/ASN → RDAP 服务器），**不联网**，仅返回元数据。
+
+| flag | 类型 | 默认值 | 一句话 |
+|------|------|--------|--------|
+| `--tld` | string | — | 按 TLD 查看 RDAP 服务器 |
+| `--asn` | string | — | 按 ASN 查看 RDAP 服务器（如 `13335` 或 `AS13335`） |
+
+二者至少给一个，否则报错。
+
+```bash
+./bin/whois-hacker rdap bootstrap --tld com
+./bin/whois-hacker rdap bootstrap --asn 13335
+```
+
 ### `batch <file>`
 
 批量查询文件中的域名列表。
 
 | flag | 类型 | 默认值 | 一句话 |
 |------|------|--------|--------|
-| `--concurrency` | int | — | 并发数 |
-| `--max-retries` | int | — | 单域名最大重试 |
-| `--query-delay` | int | — | 查询间隔（毫秒，规避限速） |
-| `--checkpoint` | bool | `false` | 启用断点续传 |
-| `--checkpoint-interval` | int | — | checkpoint 落盘间隔（秒） |
+| `--concurrency` | int | `5` | 并发数 |
+| `--max-retries` | int | `3` | 单域名最大重试 |
+| `--query-delay` | int | `200` | 查询间隔（毫秒，规避限速） |
+| `--checkpoint` | string | — | 断点续查文件路径（给值即启用断点） |
+| `--checkpoint-interval` | int | `10` | 每完成 N 个保存一次断点 |
 
 ```bash
 ./bin/whois-hacker batch domains.txt \
   --concurrency 5 --max-retries 3 --query-delay 200 \
-  --checkpoint --checkpoint-interval 30
+  --checkpoint cp.json --checkpoint-interval 10
+```
+
+#### `batch resume`
+
+从断点文件恢复未完成的批量查询，只处理断点中尚未完成的域名。断点文件由 `batch --checkpoint <file>` 在运行时产生。
+
+| flag | 类型 | 默认值 | 一句话 |
+|------|------|--------|--------|
+| `--concurrency` | int | `5` | 并发数 |
+| `--max-retries` | int | `3` | 单域名最大重试 |
+| `--query-delay` | int | `200` | 查询间隔（毫秒） |
+| `--checkpoint` | string | — | 断点文件路径（**必填**） |
+| `--checkpoint-interval` | int | `10` | 每完成 N 个保存一次断点 |
+
+```bash
+./bin/whois-hacker batch resume --checkpoint cp.json
+```
+
+### `correlation`（父命令，含 analyze/profile/registrars 子命令）
+
+多域名关联分析。直接调用 `correlation <domains>` 兼容旧行为：执行完整分析（同 `analyze` 子命令）。
+
+```bash
+./bin/whois-hacker correlation a.com b.com c.com     # 兼容旧用法
+./bin/whois-hacker correlation analyze a.com b.com
+./bin/whois-hacker correlation registrars a.com b.com
+```
+
+#### `correlation profile`
+
+查指定实体的资产画像。先跑 `correlation analyze` 拿到 entity ID，再用本子命令深入查看。
+
+| flag | 类型 | 默认值 | 一句话 |
+|------|------|--------|--------|
+| `--id` | string | — | 实体 ID（邮箱/注册人/组织名，**必填**） |
+| `--type` | string | — | 实体类型 `email`/`registrant`/`organization`（**必填**） |
+
+```bash
+./bin/whois-hacker correlation profile a.com b.com --id admin@x.com --type email
 ```
 
 ### `idn <domain>`
@@ -364,7 +424,7 @@ IDN 国际化域名转换。
 
 | flag | 类型 | 默认值 | 一句话 |
 |------|------|--------|--------|
-| `--action` | string | — | 转换动作（to-ascii/to-unicode/normalize/detect） |
+| `--action` | string | `to-ascii` | 转换动作（to-ascii/to-unicode/normalize/detect） |
 
 ```bash
 ./bin/whois-hacker idn 中文.com --action to-ascii
@@ -400,17 +460,101 @@ cat raw.txt | ./bin/whois-hacker format --detect-only
 ./bin/whois-hacker export example.com --format csv
 ```
 
-### `servers`
+### `servers`（父命令，含 list/stats/discover/refresh/save 子命令）
 
-WHOIS 服务器映射列表。
+WHOIS 服务器映射管理。直接调用 `servers`（无子命令）兼容旧行为：列出全部 TLD → 服务器映射，可按 `--tld` 过滤。
 
 | flag | 类型 | 默认值 | 一句话 |
 |------|------|--------|--------|
 | `--tld` | string | — | 仅显示指定 TLD 的服务器 |
 
 ```bash
-./bin/whois-hacker servers --tld com
+./bin/whois-hacker servers --tld com          # 兼容旧用法
+./bin/whois-hacker servers list --tld com
+./bin/whois-hacker servers stats --json
+./bin/whois-hacker servers discover xyz       # 在线发现
+./bin/whois-hacker servers refresh
+./bin/whois-hacker servers save servers.json
 ```
+
+---
+
+## ⚙️ 运维子命令组（config/cache/proxy/metrics/tools）
+
+下列五个顶层子命令组用于库级运维与本地工具，均暴露 SDK 能力。本节仅作 flag 速查，各子命令详细行为见源码注释。
+
+### `config`（库配置 WhoisLibraryConfig 管理）
+
+| 子命令 | 一句话 | 关键 flag |
+|--------|--------|-----------|
+| `config show` | 显示库配置（默认值/当前全局/指定文件） | `--default` `--file <path>` `--summary` `--json` |
+| `config validate <file>` | 校验库配置 JSON 文件合法性 | （位置参数 file） |
+| `config save <file>` | 保存库配置到 JSON 文件 | `--default`（保存默认值，否则保存当前全局） |
+| `config merge <base> <override>...` | 合并多份库配置，override 覆盖 base | `--json`（默认输出可读摘要） |
+| `config apply <file>` | 加载并应用库配置到全局（影响后续查询） | （位置参数 file） |
+
+### `cache`（缓存运维，操作全局 GetCache）
+
+| 子命令 | 一句话 | 关键 flag |
+|--------|--------|-----------|
+| `cache stats` | 显示缓存统计（条目/命中/未命中/命中率） | `--json` |
+| `cache get <domain>` | 查询指定域名的缓存条目 | `--json`（含完整 WhoisInfo） |
+| `cache delete <domain>` | 删除指定域名的缓存条目 | （位置参数 domain） |
+| `cache clear` | 清空全部缓存 | — |
+| `cache clear-expired` | 清理过期的缓存条目 | — |
+| `cache asn list` | 列出全部 ASN 详情缓存 | — |
+| `cache asn clear` | 清空 ASN 详情缓存 | — |
+
+::: tip ⚠️ 跨进程缓存
+CLI 每次调用都是新进程，`cache stats/get` 看到的是本次进程内（含懒加载初始化）的状态。要观察跨查询的缓存命中，请在 `serve` 常驻模式下通过 HTTP 端点查看，或在脚本中先 `config apply` 一份启用 Redis 的库配置再查询。
+:::
+
+### `proxy`（代理池运维，操作全局 GetProxyPool）
+
+| 子命令 | 一句话 | 关键 flag |
+|--------|--------|-----------|
+| `proxy list` | 列出全部代理及其状态（可用/失败数/响应时间） | `--json` |
+| `proxy stats` | 显示代理池汇总统计（总数/可用数） | `--json` |
+| `proxy set <address>` | 设置单个全局 WHOIS 代理（替换 defaultClient） | `--type socks5\|http` `--user <u>` `--pass <p>` `--timeout 30` |
+
+`proxy set` 的 flag：
+
+| flag | 类型 | 默认值 | 一句话 |
+|------|------|--------|--------|
+| `--type` | string | `socks5` | 代理类型（socks5/http） |
+| `--user` | string | — | 代理用户名 |
+| `--pass` | string | — | 代理密码 |
+| `--timeout` | int | `30` | 代理超时（秒） |
+
+::: tip ⚠️ 两套代理机制
+`proxy set` 设置单个代理到 `defaultClient`（不进 ProxyPool，`proxy list` 看不到）；`--use-proxy` 加载代理列表到 ProxyPool，查询时轮询。二者是两套机制。
+:::
+
+### `metrics`（指标查看与导出，操作全局 GetGlobalMetrics）
+
+| 子命令 | 一句话 | 关键 flag |
+|--------|--------|-----------|
+| `metrics stats` | 显示全局内置指标（总查询/成功/失败/缓存命中/限流/耗时） | `--json` |
+| `metrics export` | 导出为 Prometheus exposition 文本格式（可直接被 Prometheus 抓取） | — |
+
+::: tip ⚠️ 跨进程指标
+同 `cache`，CLI 每次调用都是新进程，`metrics stats/export` 看到的是本次进程内的状态。要观察跨查询的指标，请在 `serve` 常驻模式下通过 HTTP 端点查看。
+:::
+
+### `tools`（本地解析与提取工具，不联网）
+
+| 子命令 | 一句话 | 关键 flag |
+|--------|--------|-----------|
+| `tools ip-parse <ip>` | 解析 IP WHOIS 原始文本为结构化信息（从 stdin 或 `--file`） | `--file <path>` |
+| `tools domain <domain>` | 解析域名为结构化信息（TLD/SLD/子域名/通配符基础） | `--json` |
+| `tools tld <domain>` | 提取有效 TLD（含复合 TLD 如 `.co.uk`） | `--simple`（提取最后一段） |
+| `tools normalize <type> <value>` | 规范化联系人字段（`phone`/`name`/`email`） | （位置参数） |
+| `tools asn-prefixes <asn>` | 统计 ASN 的 IPv4/IPv6 前缀数（**需联网**查 ASN 详情） | — |
+| `tools asn-ip-ranges <asn>` | 按 ASN 取宣告的 IPv4/IPv6 IP 段 | `--json` |
+
+::: tip ⚠️ tools 大多不联网，但有例外
+`tools ip-parse/domain/tld/normalize` 为纯本地计算；`tools asn-prefixes` 需先联网查询 ASN 详情再统计，`tools asn-ip-ranges` 通过 RDAP 取 IP 段。
+:::
 
 ---
 

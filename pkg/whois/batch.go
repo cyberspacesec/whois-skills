@@ -212,9 +212,10 @@ func (p *StreamBatchProcessor) Process(ctx context.Context, domains []string) er
 		return fmt.Errorf("域名列表不能为空")
 	}
 
-	// 创建带取消的上下文
+	// 创建带取消的上下文。注意：cancel 不能用 defer 在 Process 返回时调用，
+	// 否则会立即取消 ctx，导致后台 worker 检测到 ctx.Done() 后退出而不产出结果。
+	// cancel 在所有 worker 完成、resultChan 关闭后再调用（见下方 wg.Wait goroutine）。
 	ctx, p.cancel = context.WithCancel(ctx)
-	defer p.cancel()
 
 	p.startTime = time.Now()
 	p.totalTasks = int64(len(domains))
@@ -241,6 +242,9 @@ func (p *StreamBatchProcessor) Process(ctx context.Context, domains []string) er
 	if len(pendingDomains) == 0 {
 		logrus.Info("所有域名已完成查询")
 		close(p.resultChan)
+		if p.cancel != nil {
+			p.cancel()
+		}
 		return nil
 	}
 
@@ -261,10 +265,13 @@ func (p *StreamBatchProcessor) Process(ctx context.Context, domains []string) er
 		}()
 	}
 
-	// 等待所有worker完成
+	// 等待所有worker完成，关闭结果通道并取消上下文
 	go func() {
 		wg.Wait()
 		close(p.resultChan)
+		if p.cancel != nil {
+			p.cancel()
+		}
 	}()
 
 	return nil

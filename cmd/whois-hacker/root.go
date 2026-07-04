@@ -86,6 +86,11 @@ func newRootCmd() *cobra.Command {
 		newFormatCmd(),
 		newExportCmd(),
 		newServersCmd(),
+		newConfigCmd(),
+		newCacheCmd(),
+		newProxyCmd(),
+		newMetricsCmd(),
+		newToolsCmd(),
 	)
 
 	// Cobra 自动补全子命令
@@ -127,7 +132,8 @@ func newRootCmd() *cobra.Command {
 // needsServerManager 判断子命令是否需要加载 WHOIS 服务器管理器。
 func needsServerManager(name string) bool {
 	switch name {
-	case "whois", "ip", "availability", "diff", "quality", "correlation", "batch":
+	case "whois", "ip", "asn", "availability", "diff", "quality", "correlation", "batch",
+		"asn-prefixes", "asn-ip-ranges", "analyze", "profile", "registrars":
 		return true
 	default:
 		return false

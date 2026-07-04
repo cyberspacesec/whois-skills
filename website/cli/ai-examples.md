@@ -390,6 +390,79 @@ curl -X POST http://127.0.0.1:8080/api/mcp/approve_request_completion \
 
 ---
 
+## 🛠️ 运维与本地工具示例
+
+CLI 新增了 `config` / `cache` / `proxy` / `metrics` / `tools` 五大运维子命令组，并扩展了 `servers` / `rdap bootstrap` / `correlation` / `batch resume`。以下示例面向 AI Agent，可直接作为子进程调用模板（stdout 输出干净 JSON 或可读摘要，stderr 输出进度）。
+
+::: warning ⚠️ 跨进程状态局限
+`cache` 与 `metrics` 操作的是进程内全局实例，每次 CLI 调用都是新进程。单次调用的缓存命中率/指标为 0 是正常的——要观察跨查询累积，请用 `serve` 常驻模式后访问 HTTP 端点。详见 [运维与本地工具](./tools.md)。
+:::
+
+```bash
+# 1. 看默认库配置（WhoisLibraryConfig 九大子系统默认值）
+whois-hacker config show --default
+
+# 2. 应用一份库配置（如启用 Redis 缓存）后再查询，影响后续查询默认行为
+whois-hacker config apply redis.json
+whois-hacker whois example.com --format json
+
+# 3. 缓存运维（stats / get，单进程内或 serve 模式下观察）
+whois-hacker cache stats --json
+whois-hacker cache get example.com --json
+
+# 4. 设置单个全局 WHOIS 代理（替换默认客户端，与 --use-proxy 代理池独立）
+whois-hacker proxy set 127.0.0.1:1080 --type socks5
+
+# 5. 导出 Prometheus 文本指标（可被 Prometheus 直接抓取）
+whois-hacker metrics export
+
+# 6. 提取有效 TLD（正确识别复合 TLD 如 .co.uk）
+whois-hacker tools tld a.b.example.co.uk
+# 输出: co.uk
+
+# 7. 解析域名结构（TLD/SLD/子域名/通配符基础）
+whois-hacker tools domain a.b.example.co.uk --json
+
+# 8. 在线发现某 TLD 的 WHOIS 服务器
+whois-hacker servers discover com
+
+# 9. 查看 RDAP bootstrap 映射（不发起 RDAP 查询，仅返回元数据）
+whois-hacker rdap bootstrap --tld com
+whois-hacker rdap bootstrap --asn 13335
+
+# 10. 断点续查：批量查询被中断后，只跑未完成的域名
+whois-hacker batch resume --checkpoint cp.json
+```
+
+```python
+import subprocess, json
+
+# AI Agent 集成示例：提取有效 TLD（纯本地，不联网，适合快速分流域名）
+def tld(domain):
+    out = subprocess.run(
+        ["whois-hacker", "tools", "tld", domain],
+        capture_output=True, text=True, check=True
+    )
+    return out.stdout.strip()
+
+print(tld("a.b.example.co.uk"))   # 'co.uk'
+
+# 查看默认库配置（决定是否 apply 一份自定义配置）
+def default_config():
+    out = subprocess.run(
+        ["whois-hacker", "config", "show", "--default", "--json"],
+        capture_output=True, text=True, check=True
+    )
+    # config show --json 在摘要后追加 JSON；取第一个 { 之后的 JSON 段
+    text = out.stdout
+    start = text.find("{")
+    return json.loads(text[start:]) if start >= 0 else None
+```
+
+📖 各子命令的完整 flag 与用法见 [运维与本地工具](./tools.md)。
+
+---
+
 ## 6️⃣ Python 集成示例
 
 ```python

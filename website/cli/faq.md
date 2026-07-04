@@ -115,6 +115,69 @@ healthcheck:
 
 ---
 
+### Q4.5：`batch` 查询成功但结果始终为 `results: null`、进度回调不输出 ✅ 已修复
+
+::: tip ✅ 状态：已修复
+`pkg/whois/batch.go` 的 `StreamBatchProcessor.Process` 已修复 cancel 时序问题：cancel 不再用 `defer` 在 Process 返回时触发，而是移到"所有 worker 完成、`resultChan` 关闭之后"的 goroutine 中，以及 `pendingDomains` 为空提前返回的分支里。现在 `batch` 与 `batch resume` 都能正常产出结果。下方为历史记录与当前正确用法。
+:::
+
+**历史现象**：执行 `whois-hacker batch domains.txt` 时，域名列表被正确读取、worker 也启动了，但最终 stdout 输出始终是：
+
+```json
+{"total": 100, "results": null}
+```
+
+且进度回调（`[N/M] 成功 X 失败 Y 剩余 Z`）一行都不打印，仿佛后台 worker 从未运行。
+
+**历史根因**：`pkg/whois/batch.go` 的 `StreamBatchProcessor.Process` 用了：
+
+```go
+func (p *StreamBatchProcessor) Process(ctx context.Context, domains []string) error {
+    ctx, p.cancel = context.WithCancel(ctx)
+    defer p.cancel()   // ← 问题所在
+    // ... 启动后台 worker（select <-ctx.Done() 退出）
+    return nil
+}
+```
+
+`Process` 启动后台 worker 后**立即返回**。`defer p.cancel()` 在返回瞬间触发，立即取消了 `ctx`。后台 worker 的主循环 `select { case <-ctx.Done(): return; ... }` 在 `ctx.Done()` 处立即退出，**根本来不及产出任何 result**，`resultChan` 被空关闭，CLI 主 goroutine `for r := range processor.Results()` 收到 0 个元素，于是 `results: null`。进度回调同理——worker 还没跑就退了，自然不会回调。
+
+**修复**：把 `cancel` 调用移出 `defer`，放到两处正确位置：
+
+```go
+// 1) pendingDomains 为空、提前返回的分支：先 close(resultChan) 再 cancel
+if len(pendingDomains) == 0 {
+    close(p.resultChan)
+    if p.cancel != nil { p.cancel() }
+    return nil
+}
+
+// 2) 正常路径：等所有 worker 完成、resultChan 关闭后再 cancel
+go func() {
+    wg.Wait()
+    close(p.resultChan)
+    if p.cancel != nil { p.cancel() }
+}()
+```
+
+这样 `ctx` 在 worker 真正运行期间保持有效，只有全部完成后才取消。
+
+**当前正确用法**：
+
+```bash
+# 正常批量查询（结果通过 results 数组返回，进度回调输出到 stderr）
+whois-hacker batch domains.txt --checkpoint cp.json
+
+# 中断后续跑（只处理 cp.json 中尚未完成的域名）
+whois-hacker batch resume --checkpoint cp.json
+```
+
+`batch` 相关 flag：`--concurrency`（并发，默认 5）、`--max-retries`（默认 3）、`--query-delay`（域间延迟毫秒，默认 200）、`--checkpoint`（断点文件路径）、`--checkpoint-interval`（每完成 N 个保存一次，默认 10）。
+
+📖 详见 [运维与本地工具](./tools.md) 与 [命令行参数](./flags.md)。
+
+---
+
 ### Q5：Redis 缓存连接地址无法通过 flag 配置
 
 **现象**：`--cache-type redis` 时，Redis 地址固定为 `localhost:6379`（无密码、DB 0、连接池 10），源码中硬编码，无对应 flag 或 YAML 字段。

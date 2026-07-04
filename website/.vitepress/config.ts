@@ -301,6 +301,7 @@ function sidebarCli() {
         { text: '🚀 启动与运行', link: '/cli/usage' },
         { text: '🚩 命令行参数', link: '/cli/flags' },
         { text: '⚙️ 配置文件', link: '/cli/config-file' },
+        { text: '🛠️ 运维与本地工具', link: '/cli/tools' },
         { text: '📝 日志与输出', link: '/cli/logging' },
         { text: '🛑 优雅关闭与信号', link: '/cli/signals' },
         { text: '🐳 Docker 命令', link: '/cli/docker' },
