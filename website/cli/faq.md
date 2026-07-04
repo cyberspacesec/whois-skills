@@ -1,111 +1,108 @@
 # ❓ CLI 常见问题
 
-> 🐛 启动与运行中常见问题、已知 bug 及其规避方法。基于对源码（`cmd/whois-hacker/main.go`、`Makefile`、`Dockerfile`、`docker-compose.yml`）的实际验证整理。
+> 🐛 启动与运行中常见问题、已知 bug 及其规避方法。基于对源码（`cmd/whois-hacker/*`、`Makefile`、`Dockerfile`、`docker-compose.yml`）的实际验证整理。
+
+::: tip ✅ CLI 已重构为 cobra 子命令结构
+旧版基于 Go `flag` 包的"纯 flag 服务型"已重构为基于 `cobra` 的子命令结构：`whois-hacker` 既能直接查询（查完即退出），也能 `serve` 启动服务。历史上 Q1–Q4 描述的 bug（make run 引用 api.go、无 version 子命令、serve 吞 flag、compose healthcheck 用 version）**均已修复**，下文保留其排查记录并标注修复状态，供升级用户对照。
+:::
 
 ---
 
 ## 🐛 已知问题
 
-### Q1：`make run` 报错 `stat ./cmd/whois-hacker/api.go: no such file or directory`
+### Q1：`make run` 报错 `stat ./cmd/whois-hacker/api.go: no such file or directory` ✅ 已修复
 
-**原因**：`Makefile` 的 `run` 目标写的是：
+::: tip ✅ 状态：已修复
+`Makefile` 的 `run` 目标已改为 `go run ./cmd/whois-hacker serve`，不再引用不存在的 `api.go`，且正确传入 `serve` 子命令。下方为历史记录，供升级对照。
+:::
+
+**历史原因**：旧 `Makefile` 的 `run` 目标写的是：
 
 ```makefile
 run:
 	go run ./cmd/whois-hacker/main.go ./cmd/whois-hacker/api.go serve
 ```
 
-但 `cmd/whois-hacker/` 目录下**只有 `main.go` 和 `main_test.go`**，不存在 `api.go`，且 `main.go` 不处理 `serve` 子命令。
+但 `cmd/whois-hacker/` 目录下**只有 `main.go` 和 `main_test.go`**，不存在 `api.go`，且旧 `main.go` 不处理 `serve` 子命令。
 
-**规避**：直接用 `go run` 或构建后运行：
+**当前正确用法**：
 
 ```bash
-# 方式 1：go run（不带 serve 子命令）
-go run ./cmd/whois-hacker --host 127.0.0.1 --port 8080
+# make run（已修复，等价于 go run ./cmd/whois-hacker serve）
+make run
 
-# 方式 2：先构建再运行（推荐）
+# 便捷查询目标（新增）
+make query DOMAIN=example.com
+
+# 或直接构建后运行
 make build
-./bin/whois-hacker
-```
-
-**根治建议**：把 Makefile 的 `run` 目标改为：
-
-```makefile
-run:
-	@echo "启动API服务..."
-	go run ./cmd/whois-hacker
+./bin/whois-hacker serve
 ```
 
 ---
 
-### Q2：没有 `--version` / `version` 命令显示版本号
+### Q2：没有 `--version` / `version` 命令显示版本号 ✅ 已修复
 
-**现象**：`./bin/whois-hacker --version` 或 `./bin/whois-hacker version` 都无法输出版本。
+::: tip ✅ 状态：已修复
+CLI 已新增 `version` 子命令，版本号由 `-ldflags` 注入 `main.Version`/`BuildTime`/`GitCommit`。下方为历史记录。
+:::
 
-**原因**：
+**历史原因**：
 
-- `main.go` 中**没有定义** `Version`、`BuildTime`、`GitCommit` 变量
+- 旧 `main.go` 中**没有定义** `Version`、`BuildTime`、`GitCommit` 变量
 - Makefile / Dockerfile 的 `-ldflags "-X main.Version=..."` 试图注入这些变量，但目标变量不存在，注入无效（静默失败）
-- `flag` 包未注册 `--version` flag，也没有子命令处理
+- 旧 `flag` 包未注册 `--version` flag，也没有子命令处理
 
-**规避**：当前无法通过 CLI 获取版本号。如需版本信息，可：
+**当前正确用法**：
 
-- 查看构建时的 git tag 或 Release 页面版本
-- 自行在 `main.go` 添加 `var Version string` 变量并注册 `--version` flag
-
-**根治建议**：在 `main.go` 增加：
-
-```go
-var (
-    Version   string
-    BuildTime string
-    GitCommit string
-)
-
-// init 中注册
-flag.BoolFunc("version", "打印版本信息并退出", func(s string) error {
-    fmt.Printf("whois-hacker %s (commit: %s, built: %s)\n", Version, GitCommit, BuildTime)
-    os.Exit(0)
-    return nil
-})
+```bash
+./bin/whois-hacker version
+# 输出版本号、commit、构建时间
 ```
+
+`cmd_version.go` 已定义 `version` 子命令，Makefile 与 Dockerfile 的 ldflags 注入生效。
 
 ---
 
-### Q3：Docker / compose 里 `serve` 子命令导致 `--host`/`--port` 失效
+### Q3：Docker / compose 里 `serve` 子命令导致 `--host`/`--port` 失效 ✅ 已修复
 
-**现象**：用 `Dockerfile` 默认 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]` 启动容器后，外部无法访问 `8080` 端口，日志显示监听 `127.0.0.1:8080`（而非 `0.0.0.0`）。
+::: tip ✅ 状态：已修复
+CLI 已迁移到 `cobra`，`serve` 是真实子命令，flag 在其前后均可正确解析。Dockerfile 的 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]` 现在完全正确。下方为历史记录。
+:::
 
-**原因**：Go 的 `flag` 包**遇到第一个非 flag 位置参数即停止解析后续 flag**。`serve` 被当作位置参数，其后的 `--host 0.0.0.0 --port 8080` 全部被忽略，回退到默认值 `127.0.0.1:8080`。容器内监听 localhost，外部自然访问不到。
+**历史原因**：旧版用 Go 标准 `flag` 包，**遇到第一个非 flag 位置参数即停止解析后续 flag**。`serve` 被当作位置参数，其后的 `--host 0.0.0.0 --port 8080` 全部被忽略，回退到默认值 `127.0.0.1:8080`。容器内监听 localhost，外部自然访问不到。
 
-**实测对照**：
+**历史实测对照**：
 
-| 命令 | 实际监听 | 结果 |
+| 命令 | 旧版实际监听 | 旧版结果 |
 |------|----------|------|
-| `whois-hacker serve --host 0.0.0.0 --port 9090` | `127.0.0.1:8080` | ❌ flag 失效 |
+| `whois-hacker serve --host 0.0.0.0 --port 9090` | `127.0.0.1:8080` | ❌ flag 被吞 |
 | `whois-hacker --host 0.0.0.0 --port 9090` | `0.0.0.0:9090` | ✅ 正确 |
 
-**规避**：覆盖 `CMD`，去掉 `serve`：
+**当前正确用法**（cobra 下两种写法都对）：
 
 ```bash
+# serve 是真实子命令，flag 正常解析
 docker run -d -p 8080:8080 cyberspacesec/whois-skills:latest \
-  --host 0.0.0.0 --port 8080
+  serve --host 0.0.0.0 --port 8080
+
+# 也可把 flag 放在 serve 前（cobra 全局持久 flag）
+whois-hacker --host 0.0.0.0 serve --port 8080
 ```
-
-**根治建议**：
-
-- 短期：把 `Dockerfile` 的 `CMD` 改为 `CMD ["--host", "0.0.0.0", "--port", "8080"]`
-- 长期：在 `main.go` 增加子命令处理（消费 `serve`/`version` 首参）或改用 `cobra` 等 CLI 框架
 
 📖 详见 [Docker 命令](./docker.md)。
 
 ---
 
-### Q4：docker-compose 的 healthcheck 用 `version` 子命令失败
+### Q4：docker-compose 的 healthcheck 用 `version` 子命令失败 ✅ 已修复
 
-**现象**：`docker-compose.yml` 的 healthcheck 写的是 `["CMD", "/app/bin/whois-hacker", "version"]`，但该子命令不存在（见 Q2），且路径 `/app/bin/whois-hacker` 与 Dockerfile 实际产物 `/app/whois-hacker` 不一致。
+::: tip ✅ 状态：已修复
+`docker-compose.yml` 已修正：healthcheck 改用 `curl -f http://localhost:8080/api/health` 真实探测，`command` 改用 `["serve", ...]` 配合 `ENTRYPOINT`。下方为历史记录。
+:::
 
-**规避**：用真正的健康检查端点：
+**历史原因**：旧 `docker-compose.yml` 的 healthcheck 写的是 `["CMD", "/app/bin/whois-hacker", "version"]`，但旧版无 `version` 子命令（见 Q2），且路径 `/app/bin/whois-hacker` 与 Dockerfile 实际产物 `/app/whois-hacker` 不一致。
+
+**当前正确写法**（已内置）：
 
 ```yaml
 healthcheck:
@@ -122,7 +119,7 @@ healthcheck:
 
 **现象**：`--cache-type redis` 时，Redis 地址固定为 `localhost:6379`（无密码、DB 0、连接池 10），源码中硬编码，无对应 flag 或 YAML 字段。
 
-**原因**：`main.go` 的 `setupCache` 中：
+**原因**：`cmd_serve.go` 的 `setupCache` 中：
 
 ```go
 if cacheType == "redis" {
@@ -151,7 +148,7 @@ lsof -i :8080        # Linux/Mac
 netstat -ano | grep 8080   # Windows
 
 # 换端口启动
-./bin/whois-hacker --port 9090
+./bin/whois-hacker serve --port 9090
 ```
 
 ---
@@ -196,7 +193,7 @@ netstat -ano | grep 8080   # Windows
 flowchart TD
     Fail(["查询失败/超时"])
     Fail --> Net{"能访问外网?"}
-    Net -- 否 --> Proxy["启用代理池<br/>--proxy --proxy-file ..."]
+    Net -- 否 --> Proxy["启用代理池<br/>--use-proxy --proxy-file ..."]
     Net -- 是 --> Rate{"是否被限速?"}
     Rate -- 是 --> Delay["增大 query_delay<br/>降低并发"]
     Rate -- 否 --> Debug["--log-level debug<br/>看详细错误"]
@@ -212,7 +209,7 @@ flowchart TD
     class Proxy,Delay,Debug,Retry,Parse fix
 ```
 
-- **网络受限**：启用代理池 `--proxy`
+- **网络受限**：启用代理池 `--use-proxy`
 - **被 WHOIS 服务器限速**：增大 `query_delay_ms`、降低批量 `concurrency`
 - **特定 TLD 解析失败**：改用 RDAP 端点 `/api/rdap/domain`
 - **看详细错误**：`--log-level debug`
@@ -223,11 +220,15 @@ flowchart TD
 
 ### Q11：缓存命中率为 0
 
+::: tip ℹ️ 缓存 flag 属于 serve 子命令
+`--cache`/`--cache-ttl`/`--cache-type` 等缓存 flag 是 `serve` 子命令专属。直接查询模式（`whois`/`ip` 等子命令）不经过 serve 的缓存层，每次都打上游。
+:::
+
 **检查**：
 
-1. 确认 `--cache=true`（默认开）
-2. 确认 `--cache-ttl` 未设过小
-3. 本地缓存是进程内的，重启服务后清空——如需跨重启共享，用 `--cache-type redis`
+1. 确认 `serve --cache=true`（默认开）
+2. 确认 `serve --cache-ttl` 未设过小
+3. 本地缓存是进程内的，重启服务后清空——如需跨重启共享，用 `serve --cache-type redis`
 
 ---
 
@@ -252,8 +253,8 @@ flowchart TD
 **检查清单**：
 
 1. `-p 8080:8080` 端口映射是否加了
-2. 启动参数是否 `--host 0.0.0.0`（不能是默认的 `127.0.0.1`）
-3. 是否踩了 Q3 的 `serve` 子命令坑（flag 被吞）
+2. 启动参数是否 `serve --host 0.0.0.0`（不能是默认的 `127.0.0.1`）
+3. Q3 的 `serve` 子命令坑已修复，可忽略；若仍访问不到，检查容器内进程是否真的在监听 `0.0.0.0:8080`（`docker exec ... netstat -tlnp`）
 
 ---
 

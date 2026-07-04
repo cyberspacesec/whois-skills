@@ -9,33 +9,39 @@
 ```mermaid
 flowchart LR
     User["👤 用户 / 🤖 AI Agent"]
-    CLI["💻 whois-hacker<br/>命令行启动服务"]
-    Service["🌐 HTTP API 服务<br/>:8080"]
-    Core["🔍 WHOIS 核心能力<br/>域名/IP/ASN/RDAP/反向"]
+    CLI["💻 whois-hacker<br/>cobra 命令行工具"]
+    Direct["⚡ 直接查询<br/>whois/ip/asn/rdap..."]
+    Service["🌐 serve 启动 HTTP 服务"]
+    Core["🔍 WHOIS 核心能力"]
 
-    User -->|"./whois-hacker"| CLI
-    CLI -->|"启动"| Service
-    User -.->|"HTTP 调用"| Service
+    User -->|"whois example.com"| CLI
+    CLI -->|"查询子命令"| Direct
+    CLI -->|"serve 子命令"| Service
+    Direct --> Core
     Service --> Core
+    User -.->|"HTTP 调用"| Service
 
     classDef user fill:#41b883,color:#fff,stroke:#2b7a4b
     classDef cli fill:#647eff,color:#fff,stroke:#4a5fd6
-    classDef svc fill:#e6a23c,color:#fff,stroke:#b7821c
-    classDef core fill:#909399,color:#fff,stroke:#6b6e72
+    classDef direct fill:#e6a23c,color:#fff,stroke:#b7821c
+    classDef svc fill:#909399,color:#fff,stroke:#6b6e72
+    classDef core fill:#67c23a,color:#fff,stroke:#4e8e2a
     class User user
     class CLI cli
+    class Direct direct
     class Service svc
     class Core core
 ```
 
-**Whois Hacker 的 CLI 不是"查一下就退出"的查询命令**，而是一个**常驻服务进程**的启动器：
+**Whois Hacker 的 CLI 基于 cobra，有两种工作模式**：
 
-- ✅ 你执行 `./whois-hacker`，它启动一个监听 `:8080` 的 HTTP 服务
-- ✅ 之后所有查询（域名/IP/ASN/RDAP/批量/关联……）都通过 `curl` 或 HTTP 客户端发起
-- ✅ AI Agent 只需能发 HTTP 请求即可集成，无需绑定任何语言 SDK
+- ✅ **直接查询模式**：`whois-hacker whois example.com` —— 一次查询，结果输出到 stdout，查完即退出
+- ✅ **服务模式**：`whois-hacker serve` —— 启动常驻 HTTP 服务，之后通过 HTTP/MCP 调用
 
-::: tip 🤖 为什么这样设计对 AI 友好
-AI Agent（Claude、GPT 等）天然擅长发起 HTTP 请求并解析 JSON。把能力暴露为 HTTP API，比让 AI 去调用某个语言的 CLI 子命令更通用、更稳定、更易跨平台。CLI 只负责"把服务跑起来并调好所有旋钮"。
+所有 SDK 能力都通过子命令暴露：域名/IP/ASN/RDAP/可注册性/差异/质量/关联/批量/IDN/格式/导出/服务器。
+
+::: tip 🤖 为什么对 AI 友好
+AI Agent 既能用子命令直接查（`whois-hacker whois x.com`，解析 stdout JSON），也能让服务常驻后批量 HTTP 调用。两种模式输出都是结构化 JSON，便于 Agent 消费。
 :::
 
 ---
@@ -44,33 +50,80 @@ AI Agent（Claude、GPT 等）天然擅长发起 HTTP 请求并解析 JSON。把
 
 | 能力 | 是否支持 | 说明 |
 |------|---------|------|
-| 启动 HTTP 服务 | ✅ | 默认 `127.0.0.1:8080` |
-| 命令行 flag 调参 | ✅ | 18 个 flag 覆盖六大子系统 |
-| YAML 配置文件 | ✅ | `config/config.yaml`，与 flag 可混用 |
-| 缓存 / 代理 / 限流 / 监控 / 告警 | ✅ | 启动时按 flag 开关初始化 |
-| 优雅关闭 | ✅ | `SIGINT`/`SIGTERM` 触发，5s 超时 |
-| 版本号输出（`--version`） | ❌ | 当前版本未实现，详见 [FAQ](./faq.md) |
-| 查询子命令（如 `whois-hacker query x.com`） | ❌ | 查询走 HTTP API，不走 CLI 子命令 |
-| `make run` 直接运行 | ⚠️ | Makefile 的 `run` 目标当前有 bug，详见 [FAQ](./faq.md) |
+| 直接查询域名/IP/ASN/RDAP | ✅ | `whois`/`ip`/`asn`/`rdap` 子命令，查完即退出 |
+| 情报分析（差异/质量/关联/批量） | ✅ | `diff`/`quality`/`correlation`/`batch` 子命令 |
+| 工具命令（IDN/格式/导出/服务器） | ✅ | `idn`/`format`/`export`/`servers` 子命令 |
+| 启动 HTTP 服务 | ✅ | `serve` 子命令，默认 `127.0.0.1:8080` |
+| 命令行 flag 调参 | ✅ | 全局 flag + 各子命令专属 flag |
+| YAML 配置文件 | ✅ | `--config config/config.yaml` |
+| 优雅关闭 | ✅ | `serve` 模式下 `SIGINT`/`SIGTERM` 触发，5s 超时 |
+| Shell 自动补全 | ✅ | `whois-hacker completion bash/zsh/fish` |
+| 版本号输出 | ✅ | `whois-hacker version` |
+| 结构化 JSON 输出 | ✅ | 默认 `--format json`，便于 AI 消费 |
+
+---
+
+## 🌳 命令树
+
+```mermaid
+flowchart TD
+    Root["whois-hacker"]
+
+    Root --> Serve["serve<br/>启动 HTTP 服务"]
+    Root --> Version["version<br/>版本信息"]
+    Root --> Query["🔍 查询类"]
+    Root --> Analyze["🔬 分析类"]
+    Root --> Tools["🛠️ 工具类"]
+
+    Query --> Whois["whois &lt;domain&gt;"]
+    Query --> IP["ip &lt;ip&gt;"]
+    Query --> ASN["asn &lt;asn&gt;"]
+    Query --> RDAP["rdap"]
+    Query --> Avail["availability &lt;domain&gt;"]
+    RDAP --> RD1["rdap domain/ip/asn/entity"]
+
+    Analyze --> Diff["diff &lt;d1&gt; &lt;d2&gt;"]
+    Analyze --> Quality["quality &lt;domain&gt;"]
+    Analyze --> Corr["correlation &lt;d1&gt; &lt;d2&gt;..."]
+    Analyze --> Batch["batch &lt;file&gt;"]
+
+    Tools --> IDN["idn &lt;domain&gt;"]
+    Tools --> Format["format [file]"]
+    Tools --> Export["export &lt;domain&gt;"]
+    Tools --> Servers["servers"]
+
+    classDef root fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef cat fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef cmd fill:#e6a23c,color:#fff,stroke:#b7821c
+    class Root root
+    class Serve,Version,Query,Analyze,Tools,RDAP cat
+    class Whois,IP,ASN,Avail,RD1,Diff,Quality,Corr,Batch,IDN,Format,Export,Servers cmd
+```
 
 ---
 
 ## 🚀 30 秒快速开始
 
 ```bash
-# 1. 构建（或从 Releases 下载预编译二进制）
+# 1. 构建
 make build                       # 产物：bin/whois-hacker
 
-# 2. 启动服务（前台运行，日志输出到终端）
-./bin/whois-hacker --host 127.0.0.1 --port 8080
+# 2. 直接查询（查完即退出，输出 JSON）
+./bin/whois-hacker whois example.com
 
-# 3. 另开一个终端，发起第一次查询
-curl -X POST http://127.0.0.1:8080/api/whois \
-  -H "Content-Type: application/json" \
-  -d '{"domain":"example.com"}'
+# 3. 或启动服务（常驻，供 HTTP 调用）
+./bin/whois-hacker serve --host 0.0.0.0 --port 8080
 ```
 
-看到 JSON 响应即表示 CLI 与服务正常工作。📖 完整启动选项见 [启动与运行](./usage.md)。
+```bash
+# 查看所有命令
+./bin/whois-hacker --help
+
+# 查看某命令的参数
+./bin/whois-hacker whois --help
+```
+
+📖 完整启动选项见 [启动与运行](./usage.md)。
 
 ---
 

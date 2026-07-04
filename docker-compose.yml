@@ -17,14 +17,14 @@ services:
       - ENABLE_RATE_LIMIT=true
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "/app/bin/whois-hacker", "version"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 5s
-    command: ["/app/bin/whois-hacker", "serve", "--host", "0.0.0.0", "--port", "8080"]
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--log-format", "json"]
     volumes:
       - whois_data:/app/data
 
 volumes:
-  whois_data: 
+  whois_data:

@@ -2,6 +2,11 @@
 
 > 📄 `config/config.yaml` —— 用一份文件管理所有启动参数，避免长串命令行 flag。
 
+::: tip 🔁 谁读这份配置
+CLI 重构为 cobra 子命令后，配置文件由根命令的 `PersistentPreRunE` 在所有子命令执行前加载（`helpers.go` 的 `loadConfigFromFile`，负责 `log`/`proxy` 字段）。**`serve` 子命令通过自身的 `applyServeConfigFromYAML` 读取 `server`/`cache`/`metrics`/`alerts` 字段**来配置常驻服务；查询类子命令（`whois`/`ip`/`asn` 等）则主要用全局 flag 与各自专属 flag，继承 `log` 与 `proxy` 配置。命令行显式 flag 仍优先于配置文件。
+:::
+
+
 ---
 
 ## 📁 默认路径与加载
@@ -14,30 +19,33 @@
 | 文件解析失败 | 警告日志，继续用 flag 默认值启动 |
 | 格式 | YAML |
 
-加载时机：`flag.Parse()` 之后、各子系统初始化之前。
+加载时机：cobra 解析命令行 flag 之后、子命令执行之前（`PersistentPreRunE` 钩子）。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Main as main()
-    participant Flag as flag 包
+    participant Root as rootCmd
+    participant Cobra as cobra
     participant YAML as LoadYAMLConfig
-    participant Sub as 子系统初始化
+    participant Sub as 子命令（serve/whois/...）
 
-    Main->>Flag: flag.Parse()
-    Main->>YAML: LoadYAMLConfig(configFile)
+    Root->>Cobra: Execute()
+    Cobra->>Cobra: 解析命令行 flag
+    Cobra->>Root: PersistentPreRunE
+    Root->>YAML: LoadYAMLConfig(flagConfig)
     alt 文件存在且合法
-        YAML-->>Main: cfg
-        Main->>Flag: flag.Visit 记录显式 flag
-        Main->>Main: 逐项合并（flag 未显式则用 cfg）
+        YAML-->>Root: cfg
+        Root->>Root: Flags().Changed 反查显式 flag
+        Root->>Root: log/proxy 未显式则用 cfg 覆盖
+        Note over Sub: serve 执行时再读 server/cache/metrics/alerts
     else 文件不存在
-        YAML-->>Main: err (IsNotExist)
-        Main->>Main: 静默回退默认值
+        YAML-->>Root: err (IsNotExist)
+        Root->>Root: 静默回退默认值
     else 解析失败
-        YAML-->>Main: err
-        Main->>Main: 警告 + 回退默认值
+        YAML-->>Root: err
+        Root->>Root: 警告 + 回退默认值
     end
-    Main->>Sub: 用最终值初始化缓存/代理/监控/告警
+    Root->>Sub: 用最终值执行子命令
 ```
 
 ---
@@ -86,26 +94,32 @@ alerts:
 
 ## 🔗 YAML 字段与 flag 对照表
 
-| YAML 路径 | 对应 flag | 类型 | 默认值 |
-|-----------|-----------|------|--------|
-| `server.host` | `--host` | string | `127.0.0.1` |
-| `server.port` | `--port` | int | `8080` |
-| `log.level` | `--log-level` | string | `info` |
-| `log.format` | `--log-format` | string | `text` |
-| `cache.enabled` | `--cache` | bool | `true` |
-| `cache.type` | `--cache-type` | string | `local` |
-| `cache.ttl` | `--cache-ttl` | int64 | `3600` |
-| `cache.warmup` | `--cache-warmup` | bool | `false` |
-| `cache.warmup_file` | `--warmup-file` | string | `config/warmup.json` |
-| `proxy.enabled` | `--proxy` | bool | `false` |
-| `proxy.file` | `--proxy-file` | string | `config/proxies.json` |
-| `metrics.enabled` | `--metrics` | bool | `true` |
-| `metrics.interval` | `--metrics-interval` | int64 | `60` |
-| `alerts.enabled` | `--alerts` | bool | `true` |
-| `alerts.interval` | `--alerts-interval` | int64 | `60` |
+所有 YAML 字段都会在命令行未显式设置对应 flag 时生效（命令行优先级最高）。
+
+| YAML 路径 | 对应 flag | 类型 | 默认值 | 读取点 |
+|-----------|-----------|------|--------|--------|
+| `server.host` | `serve --host` | string | `127.0.0.1` | serve 子命令 |
+| `server.port` | `serve --port` | int | `8080` | serve 子命令 |
+| `log.level` | `--log-level` | string | `info` | 全局 PersistentPreRun |
+| `log.format` | `--log-format` | string | `text` | 全局 PersistentPreRun |
+| `cache.enabled` | `serve --cache` | bool | `true` | serve 子命令 |
+| `cache.type` | `serve --cache-type` | string | `local` | serve 子命令 |
+| `cache.ttl` | `serve --cache-ttl` | int64 | `3600` | serve 子命令 |
+| `cache.warmup` | `serve --cache-warmup` | bool | `false` | serve 子命令 |
+| `cache.warmup_file` | `serve --warmup-file` | string | `config/warmup.json` | serve 子命令 |
+| `proxy.enabled` | `--use-proxy` | bool | `false` | 全局 PersistentPreRun |
+| `proxy.file` | `--proxy-file` | string | `config/proxies.json` | 全局 PersistentPreRun |
+| `metrics.enabled` | `serve --metrics` | bool | `true` | serve 子命令 |
+| `metrics.interval` | `serve --metrics-interval` | int64 | `60` | serve 子命令 |
+| `alerts.enabled` | `serve --alerts` | bool | `true` | serve 子命令 |
+| `alerts.interval` | `serve --alerts-interval` | int64 | `60` | serve 子命令 |
+
+::: tip ✅ 配置文件完整支持
+`log`/`proxy` 字段在全局 `PersistentPreRunE` 阶段读取（所有子命令生效）；`server`/`cache`/`metrics`/`alerts` 字段在 `serve` 子命令的 `applyServeConfigFromYAML` 中读取。查询类子命令（whois/ip/asn 等）只继承 log 与 proxy 配置。
+:::
 
 ::: tip 🤖 给 AI 的提示
-YAML 字段名是 `snake_case`（如 `warmup_file`），flag 名是 `kebab-case`（如 `--warmup-file`）。两者一一对应，仅命名风格不同。
+YAML 字段名是 `snake_case`（如 `warmup_file`），flag 名是 `kebab-case`（如 `--warmup-file`）。两者命名风格不同，但语义对应。
 :::
 
 ---
@@ -114,7 +128,7 @@ YAML 字段名是 `snake_case`（如 `warmup_file`），flag 名是 `kebab-case`
 
 ```mermaid
 flowchart LR
-    A["🚩 命令行显式 flag<br/>（flag.Visit 命中）"]
+    A["🚩 命令行显式 flag<br/>（Flags().Changed 命中）"]
     B["📄 config.yaml"]
     C["🔕 flag 注册时的默认值"]
 
@@ -132,7 +146,7 @@ flowchart LR
     class R out
 ```
 
-**判断逻辑**（`main.go` 的 `loadConfigFromFile`）：对每个配置项，先用 `flag.Visit` 检查该 flag 是否在命令行被显式设置：
+**判断逻辑**（`helpers.go` 的 `loadConfigFromFile` 处理 `log`/`proxy`；`cmd_serve.go` 的 `applyServeConfigFromYAML` 处理 `server`/`cache`/`metrics`/`alerts`）：对每个配置项，先用 `cmd.Flags().Changed("name")`（cobra 等价于旧 `flag.Visit`）检查该 flag 是否在命令行被显式设置：
 
 - **显式设置** → 用命令行值，忽略 YAML
 - **未显式设置** → 用 YAML 值（若 YAML 该字段非零值）
@@ -152,15 +166,15 @@ log:
 命令行：
 
 ```bash
-./bin/whois-hacker --port 9090
+./bin/whois-hacker serve --port 9090
 ```
 
 最终生效：
 
-| 配置项 | 命令行 | YAML | 默认值 | 最终 | 原因 |
+| 配置项 | 命令行 | YAML | flag 默认值 | 最终 | 原因 |
 |--------|--------|------|--------|------|------|
-| `port` | `9090` | `8080` | `8080` | **9090** | 命令行显式，优先 |
-| `log-level` | 未设置 | `warn` | `info` | **warn** | 命令行未设置，YAML 覆盖默认 |
+| `port` | `9090` | `8080` | `8080` | **9090** | serve flag 显式设置，直接生效 |
+| `log-level` | 未设置 | `warn` | `info` | **warn** | 未显式，YAML 覆盖默认 |
 | `host` | 未设置 | 未设置 | `127.0.0.1` | **127.0.0.1** | 都没指定，用默认 |
 
 ---

@@ -1,4 +1,4 @@
-.PHONY: build test clean docker docker-multi run help
+.PHONY: build test clean docker docker-multi run query help
 
 # 版本信息
 VERSION ?= 0.1.0
@@ -18,7 +18,8 @@ help:
 	@echo "  make clean         - 清理构建产物"
 	@echo "  make docker        - 构建Docker镜像"
 	@echo "  make docker-multi  - 构建多平台Docker镜像 (linux/amd64, linux/arm64)"
-	@echo "  make run           - 直接运行API服务"
+	@echo "  make run           - 启动 API 服务 (serve 子命令)"
+	@echo "  make query DOMAIN= - 查询域名 WHOIS"
 	@echo "  make all           - 清理、构建和测试"
 	@echo "  make help          - 显示此帮助信息"
 
@@ -71,4 +72,9 @@ docker-multi:
 # 直接运行API服务
 run:
 	@echo "启动API服务..."
-	go run ./cmd/whois-hacker/main.go ./cmd/whois-hacker/api.go serve
+	go run ./cmd/whois-hacker serve
+
+# 查询域名（便捷目标）
+query:
+	@test -n "$(DOMAIN)" || (echo "用法: make query DOMAIN=example.com" && exit 1)
+	go run ./cmd/whois-hacker whois $(DOMAIN)

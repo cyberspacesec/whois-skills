@@ -1,6 +1,10 @@
 # 🛑 信号与优雅关闭
 
-> 📋 `whois-hacker` 如何响应终止信号、优雅关闭的内部步骤，以及与 systemd 的集成。
+> 📋 `whois-hacker serve` 如何响应终止信号、优雅关闭的内部步骤，以及与 systemd 的集成。
+
+::: tip 🎯 只 serve 子命令涉及信号
+CLI 重构为 cobra 子命令后，**只有 `serve` 子命令**会启动常驻 HTTP 服务并注册信号处理。查询类子命令（`whois`/`ip`/`asn` 等）查完即退出，不监听信号、不做优雅关闭。下文所有内容均针对 `serve` 子命令。
+:::
 
 ---
 
@@ -71,7 +75,7 @@ flowchart TD
     class Exit ok
 ```
 
-关键点（来自 `main.go`）：
+关键点（来自 `cmd_serve.go` 的 `runServe`）：
 
 1. **不立即退出**：收到信号后先停止 HTTP 接收新请求
 2. **5 秒宽限**：给在途请求最多 5 秒完成（`context.WithTimeout(..., 5*time.Second)`）
@@ -85,7 +89,7 @@ flowchart TD
 ### 前台运行
 
 ```bash
-./bin/whois-hacker
+./bin/whois-hacker serve
 # 按 Ctrl+C → 发送 SIGINT → 优雅关闭
 ```
 
@@ -93,7 +97,7 @@ flowchart TD
 
 ```bash
 # 启动
-nohup ./bin/whois-hacker > /var/log/wh.log 2>&1 &
+nohup ./bin/whois-hacker serve > /var/log/wh.log 2>&1 &
 echo $! > /var/run/wh.pid
 
 # 优雅停止
@@ -117,15 +121,16 @@ sudo systemctl restart whois-hacker
 Docker 容器中，`docker stop` 会向 PID 1 进程发 `SIGTERM`，10 秒后未退出才发 `SIGKILL`。**必须让 `whois-hacker` 作为 PID 1 运行**（或用 `tini` 等init 转发信号），否则信号无法到达。
 :::
 
-正确做法（Dockerfile 用 ENTRYPOINT 的 exec 形式）：
+正确做法（Dockerfile 用 ENTRYPOINT 的 exec 形式，`serve` 作为子命令传入）：
 
 ```dockerfile
-# exec 形式：whois-hacker 替换 shell 成为 PID 1
+# exec 形式：whois-hacker 替换 shell 成为 PID 1，serve 作为参数
 ENTRYPOINT ["./whois-hacker"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
 ```bash
-docker stop whois-hacker    # 发 SIGTERM → 优雅关闭
+docker stop whois-hacker    # 发 SIGTERM → serve 优雅关闭
 ```
 
 错误做法（shell 形式，信号到不了）：

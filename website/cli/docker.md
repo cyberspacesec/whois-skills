@@ -73,51 +73,41 @@ docker run -d --name whois-hacker -p 8080:8080 \
   cyberspacesec/whois-skills:latest
 ```
 
-### ⚠️ 关键：如何正确传参
+镜像默认 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]`，启动后即对外提供 HTTP 服务。
 
-容器内入口是 `/app/whois-hacker`。**Go 的 `flag` 包遇到第一个非 flag 位置参数即停止解析后续 flag**——所以 `serve` 这种子命令会阻断其后的 `--host`/`--port`，导致它们失效、回退默认值。
+### ▶️ 如何正确传参
 
-::: warning 🐛 当前 Dockerfile / compose 的已知问题
-仓库 `Dockerfile` 的 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]` 与 `docker-compose.yml` 的 `command: ["/app/bin/whois-hacker", "serve", ...]` 中的 `serve` 子命令**实际不被 `main.go` 处理**，且会让其后的 flag 失效。实测：
-
-- `whois-hacker serve --host 0.0.0.0 --port 9090` → 实际监听 `127.0.0.1:8080`（flag 被吞）
-- `whois-hacker --host 0.0.0.0 --port 9090` → 实际监听 `0.0.0.0:9090`（正确）
-
-`main.go` 没有 `serve` 子命令，也无 `version` 子命令（compose 的 healthcheck 用了不存在的 `version`）。
-:::
-
-**正确用法**：直接覆盖 `CMD`，**不带 `serve`**：
+容器内入口是 `/app/whois-hacker`，CLI 已重构为基于 `cobra` 的子命令结构。`serve` 是真实的子命令，flag 可在其后正常解析——Dockerfile 的 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]` 完全正确。
 
 ```bash
-# 正确：flag 直接跟在入口后
+# 默认 CMD 即可：serve 子命令 + 对外监听
 docker run -d --name whois-hacker -p 8080:8080 \
-  cyberspacesec/whois-skills:latest \
-  --host 0.0.0.0 --port 8080
+  cyberspacesec/whois-skills:latest
 
-# 正确：自定义日志与缓存
+# 自定义日志与缓存（flag 跟在 serve 后）
 docker run -d --name whois-hacker -p 8080:8080 \
   -v $(pwd)/data:/app/data \
   cyberspacesec/whois-skills:latest \
-  --host 0.0.0.0 --log-level info --log-format json --cache-ttl 7200
+  serve --host 0.0.0.0 --log-level info --log-format json --cache-ttl 7200
+
+# 也可直接用查询子命令（查完即退出，容器随后退出）
+docker run --rm cyberspacesec/whois-skills:latest \
+  whois example.com --format json
 ```
 
 ```mermaid
 flowchart TD
-    Cmd1["docker run ... image serve --host 0.0.0.0"]
-    Cmd1 -->|"❌ serve 阻断 flag"| Bug["监听 127.0.0.1:8080<br/>外部访问不到"]
+    Cmd1["docker run ... image serve --host 0.0.0.0 --port 8080"]
+    Cmd1 -->|"✅ cobra 解析 serve + flag"| OK["监听 0.0.0.0:8080<br/>外部可访问"]
 
-    Cmd2["docker run ... image --host 0.0.0.0"]
-    Cmd2 -->|"✅ flag 正常解析"| OK["监听 0.0.0.0:8080<br/>外部可访问"]
+    Cmd2["docker run ... image whois example.com"]
+    Cmd2 -->|"✅ 直接查询模式"| Query["输出 JSON 到 stdout，容器退出"]
 
-    classDef bad fill:#f56c6c,color:#fff,stroke:#c04040
     classDef good fill:#67c23a,color:#fff,stroke:#4e8e2a
-    class Cmd1,Bug bad
-    class Cmd2,OK good
+    classDef query fill:#647eff,color:#fff,stroke:#4a5fd6
+    class Cmd1,OK good
+    class Cmd2,Query query
 ```
-
-::: tip 🤖 给 AI 的修正建议
-若要让 Dockerfile 的 `serve` 写法生效，需要在 `main.go` 中加入子命令处理（如用 `os.Args` 判断首参是否为 `serve`/`version` 并消费掉），或改用支持子命令的 CLI 框架（如 `cobra`）。当前最简修正：把 `CMD ["serve", "--host", "0.0.0.0", "--port", "8080"]` 改为 `CMD ["--host", "0.0.0.0", "--port", "8080"]`。详见 [FAQ](./faq.md)。
-:::
 
 ---
 
@@ -166,7 +156,7 @@ docker run -d --name whois-hacker -p 8080:8080 \
   -v whois_data:/app/data \
   -v $(pwd)/config:/app/config:ro \
   cyberspacesec/whois-skills:latest \
-  --host 0.0.0.0 --config /app/config/config.yaml
+  serve --host 0.0.0.0 --config /app/config/config.yaml
 ```
 
 ---
@@ -176,17 +166,17 @@ docker run -d --name whois-hacker -p 8080:8080 \
 默认 `EXPOSE 8080`。要让容器外的 AI/客户端访问，必须：
 
 1. `-p 8080:8080` 端口映射
-2. `--host 0.0.0.0` 让进程监听所有网卡（容器内 localhost 外部访问不到）
+2. `serve --host 0.0.0.0` 让进程监听所有网卡（容器内 localhost 外部访问不到）
 
 ```bash
-docker run -d -p 8080:8080 ... --host 0.0.0.0
+docker run -d -p 8080:8080 ... serve --host 0.0.0.0
 ```
 
 ---
 
 ## 🎼 docker-compose
 
-仓库提供 `docker-compose.yml`：
+仓库提供 `docker-compose.yml`，已修正为正确的 `serve` 子命令与健康检查端点：
 
 ```bash
 docker compose up -d          # 启动
@@ -194,11 +184,7 @@ docker compose logs -f        # 看日志
 docker compose down           # 停止
 ```
 
-::: warning 🐛 compose 文件同样的问题
-`docker-compose.yml` 的 `command` 和 `healthcheck` 也用了不存在的 `serve` / `version` 子命令，且 `command` 里的路径 `/app/bin/whois-hacker` 与 Dockerfile 实际产物路径 `/app/whois-hacker` 不一致。建议参照上文修正后使用。完整正确的 compose 写法见 [Docker Compose 部署](../deploy/compose.md)。
-:::
-
-修正后的 compose 片段：
+`command` 用 `["serve", ...]` 配合 `ENTRYPOINT ["./whois-hacker"]`，cobra 正确解析子命令与其后 flag；healthcheck 用 `curl -f http://localhost:8080/api/health` 真实探测。修正后的 compose 片段：
 
 ```yaml
 services:
@@ -208,7 +194,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    command: ["--host", "0.0.0.0", "--port", "8080", "--log-format", "json"]
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080", "--log-format", "json"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s

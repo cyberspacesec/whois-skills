@@ -44,15 +44,96 @@ flowchart TB
 | 直接 HTTP | 单次/独立查询 | `/api/*` | 无状态，一次请求一次响应 |
 | MCP 任务流 | 多步、需审批、长任务 | `/api/mcp/*` | 有状态，任务规划→执行→审批 |
 
+::: tip ⚡ 还有第三种：CLI 直接查询
+除了上面两种 HTTP 模式，AI Agent 还可直接调用 `whois-hacker` 子命令——查完即退出、stdout 输出干净 JSON，**无需启动常驻服务**。适合无状态的单次情报查询，见下文 [CLI 直接查询](#cli-直接查询)。
+:::
+
 ---
 
-## 0️⃣ 前置：启动服务
+## ⚡ CLI 直接查询
 
-AI 集成前，服务必须已运行。详见 [启动与运行](./usage.md)。
+CLI 已重构为基于 `cobra` 的子命令结构。AI Agent 无需先 `serve` 启动 HTTP 服务，直接调用子命令即可获取结构化 JSON——一次一查、查完即退出，是最轻量的集成方式。
+
+```mermaid
+flowchart LR
+    Agent["🤖 AI Agent"] -->|"subprocess.run"| CLI["whois-hacker whois x.com"]
+    CLI --> Upstream["上游 WHOIS/RDAP"]
+    Upstream --> CLI
+    CLI -->|"stdout JSON"| Agent
+    Agent -->|"json.loads"| Reason["基于情报推理"]
+
+    classDef agent fill:#41b883,color:#fff,stroke:#2b7a4b
+    classDef cli fill:#647eff,color:#fff,stroke:#4a5fd6
+    classDef up fill:#909399,color:#fff,stroke:#6b6e72
+    classDef reason fill:#e6a23c,color:#fff,stroke:#b7821c
+    class Agent agent
+    class CLI cli
+    class Upstream up
+    class Reason reason
+```
+
+### Python：subprocess + json
+
+```python
+import subprocess, json
+
+def whois(domain):
+    # 直接调用子命令，stdout 是干净 JSON
+    out = subprocess.run(
+        ["whois-hacker", "whois", domain, "--format", "json"],
+        capture_output=True, text=True, check=True
+    )
+    return json.loads(out.stdout)
+
+def asn(asn):
+    out = subprocess.run(
+        ["whois-hacker", "asn", str(asn), "--source", "all", "--include-prefixes"],
+        capture_output=True, text=True, check=True
+    )
+    return json.loads(out.stdout)
+
+print(whois("example.com"))
+```
+
+### 常用子命令一行流
+
+```bash
+# 域名 WHOIS
+whois-hacker whois example.com --format json
+
+# IP WHOIS
+whois-hacker ip 8.8.8.8
+
+# ASN（含前缀与 BGP）
+whois-hacker asn 15169 --source all --include-prefixes --include-bgp
+
+# 可注册性
+whois-hacker availability newidea-12345.com
+
+# 关联分析（多域名）
+whois-hacker correlation a.com b.com c.com
+
+# 批量查询（文件 + 断点续传）
+whois-hacker batch domains.txt --concurrency 5 --checkpoint
+
+# 导出为 CSV
+whois-hacker export example.com --format csv
+```
+
+::: tip 🤖 何时用 CLI 直查 vs HTTP 服务
+- **CLI 直查**：单次/无状态查询、CI 脚本、Agent 一次性取情报。无需管理服务生命周期，零额外端口。
+- **HTTP 服务**（`serve`）：高频/并发查询、多客户端共享、需要 MCP 任务流或批量异步状态轮询。常驻进程 + 缓存命中率高。
+:::
+
+---
+
+## 0️⃣ 前置：启动服务（HTTP 集成模式）
+
+若采用上述 HTTP / MCP 集成模式，服务必须已运行。详见 [启动与运行](./usage.md)。
 
 ```bash
 # 启动（AI 自助或由部署脚本启动）
-./bin/whois-hacker --host 0.0.0.0 --port 8080 --log-format json
+./bin/whois-hacker serve --host 0.0.0.0 --port 8080 --log-format json
 
 # 验证
 curl http://127.0.0.1:8080/api/health
