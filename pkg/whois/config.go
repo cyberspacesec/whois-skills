@@ -55,6 +55,9 @@ type WhoisLibraryConfig struct {
 	// 监控状态持久化配置
 	MonitorState MonitorStateConfig `json:"monitor_state"`
 
+	// 反向 WHOIS 配置
+	ReverseWhois ReverseWhoisConfig `json:"reverse_whois"`
+
 	// 日志配置
 	Log WhoisLogConfig `json:"log"`
 }
@@ -340,6 +343,10 @@ func DefaultWhoisLibraryConfig() WhoisLibraryConfig {
 			Type:      "local",
 			Directory: "data/monitor",
 		},
+		ReverseWhois: ReverseWhoisConfig{
+			Enabled: false,
+			Type:    "local",
+		},
 		Log: WhoisLogConfig{
 			Level:  "info",
 			Format: "text",
@@ -607,6 +614,13 @@ func ValidateWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 校验反向 WHOIS 配置
+	if cfg.ReverseWhois.Enabled {
+		if cfg.ReverseWhois.Type != "local" && cfg.ReverseWhois.Type != "custom" {
+			return fmt.Errorf("反向 WHOIS 类型必须是 local 或 custom，当前: %s", cfg.ReverseWhois.Type)
+		}
+	}
+
 	return nil
 }
 
@@ -674,6 +688,15 @@ func ApplyWhoisLibraryConfig(cfg *WhoisLibraryConfig) error {
 		}
 	}
 
+	// 初始化反向 WHOIS（如启用）
+	if cfg.ReverseWhois.Enabled {
+		if err := InitReverseWhoisFromConfig(&cfg.ReverseWhois); err != nil {
+			logrus.Warnf("初始化反向 WHOIS 失败: %v", err)
+		} else {
+			logrus.Infof("反向 WHOIS 已启用: 类型=%s", cfg.ReverseWhois.Type)
+		}
+	}
+
 	logrus.Infof("配置已应用: 查询超时=%ds, 缓存=%v, 限流=%v",
 		cfg.Query.Timeout, cfg.Cache.Enabled, cfg.RateLimit.Enabled)
 
@@ -697,7 +720,8 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 			"ASN关系: enabled=%v type=%s | "+
 			"历史: enabled=%v type=%s | "+
 			"告警存储: enabled=%v | "+
-			"监控状态: enabled=%v",
+			"监控状态: enabled=%v | "+
+			"反向WHOIS: enabled=%v type=%s",
 		cfg.Query.Timeout, cfg.Query.MaxRetries, cfg.Query.UseProxy,
 		cfg.Cache.Enabled, cfg.Cache.Type, cfg.Cache.DefaultTTLMinutes,
 		cfg.RateLimit.Enabled, cfg.RateLimit.GlobalRate,
@@ -709,6 +733,7 @@ func WhoisLibraryConfigSummary(cfg *WhoisLibraryConfig) string {
 		cfg.History.Enabled, cfg.History.Type,
 		cfg.AlertStorage.Enabled,
 		cfg.MonitorState.Enabled,
+		cfg.ReverseWhois.Enabled, cfg.ReverseWhois.Type,
 	)
 }
 

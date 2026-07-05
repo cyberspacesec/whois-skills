@@ -256,7 +256,14 @@ func SaveHistorySnapshot(ctx context.Context, domain string, info *whoisparser.W
 		Source:      "sdk",
 		Note:        note,
 	}
-	return provider.SaveSnapshot(ctx, snapshot)
+	if err := provider.SaveSnapshot(ctx, snapshot); err != nil {
+		return err
+	}
+	// 同步索引到反向 WHOIS（若已注入）
+	if err := IndexWhoisSnapshot(ctx, snapshot); err != nil {
+		logrus.Warnf("反向 WHOIS 索引失败: %v", err)
+	}
+	return nil
 }
 
 // QueryHistorySnapshots 查询域名的所有历史快照。
