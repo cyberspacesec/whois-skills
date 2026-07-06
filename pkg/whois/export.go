@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	whoisparser "github.com/likexian/whois-parser"
 )
@@ -141,4 +142,106 @@ func ExportToMarkdown(info *whoisparser.WhoisInfo, w io.Writer) error {
 
 	_, err := io.WriteString(w, sb.String())
 	return err
+}
+
+// ============================================================================
+// 导出格式扩展点
+//
+// Exporter 接口抽象导出能力，内置 json/csv/markdown 三种注册式实现。
+// 上层可通过 RegisterExporter 注入自定义格式（如 stix/cef/自定义 JSON schema），
+// 通过 ExportWith 按 format 名分发。
+// ============================================================================
+
+// Exporter WHOIS 信息导出器接口。
+type Exporter interface {
+	// Format 返回格式名（如 json/csv/markdown）。
+	Format() string
+	// Export 将 WHOIS 信息导出到 writer。
+	Export(info *whoisparser.WhoisInfo, w io.Writer) error
+}
+
+// exporterRegistry 导出器注册表。
+var exporterRegistry = struct {
+	mu        sync.RWMutex
+	exporters map[string]Exporter
+}{
+	exporters: make(map[string]Exporter),
+}
+
+func init() {
+	// 注册内置导出器
+	RegisterExporter(&jsonExporter{})
+	RegisterExporter(&csvExporter{})
+	RegisterExporter(&markdownExporter{})
+}
+
+// RegisterExporter 注册导出器（线程安全）。同名覆盖。
+func RegisterExporter(e Exporter) {
+	if e == nil {
+		return
+	}
+	exporterRegistry.mu.Lock()
+	defer exporterRegistry.mu.Unlock()
+	exporterRegistry.exporters[e.Format()] = e
+}
+
+// GetExporter 按格式名获取导出器。
+func GetExporter(format string) (Exporter, bool) {
+	exporterRegistry.mu.RLock()
+	defer exporterRegistry.mu.RUnlock()
+	e, ok := exporterRegistry.exporters[format]
+	return e, ok
+}
+
+// ListExporters 列出已注册的所有导出器格式名。
+func ListExporters() []string {
+	exporterRegistry.mu.RLock()
+	defer exporterRegistry.mu.RUnlock()
+	formats := make([]string, 0, len(exporterRegistry.exporters))
+	for f := range exporterRegistry.exporters {
+		formats = append(formats, f)
+	}
+	return formats
+}
+
+// ExportWith 按格式名导出（走注册表分发）。
+func ExportWith(info *whoisparser.WhoisInfo, format string, w io.Writer) error {
+	e, ok := GetExporter(format)
+	if !ok {
+		return fmt.Errorf("未注册的导出格式: %s（已注册: %v）", format, ListExporters())
+	}
+	return e.Export(info, w)
+}
+
+// UnregisterExporter 注销导出器（主要用于测试）。
+func UnregisterExporter(format string) {
+	exporterRegistry.mu.Lock()
+	defer exporterRegistry.mu.Unlock()
+	delete(exporterRegistry.exporters, format)
+}
+
+// ---- 内置导出器实现 ----
+
+// jsonExporter JSON 导出器。
+type jsonExporter struct{}
+
+func (e *jsonExporter) Format() string { return "json" }
+func (e *jsonExporter) Export(info *whoisparser.WhoisInfo, w io.Writer) error {
+	return ExportToJSON(info, w)
+}
+
+// csvExporter CSV 导出器。
+type csvExporter struct{}
+
+func (e *csvExporter) Format() string { return "csv" }
+func (e *csvExporter) Export(info *whoisparser.WhoisInfo, w io.Writer) error {
+	return ExportToCSV(info, w)
+}
+
+// markdownExporter Markdown 导出器。
+type markdownExporter struct{}
+
+func (e *markdownExporter) Format() string { return "markdown" }
+func (e *markdownExporter) Export(info *whoisparser.WhoisInfo, w io.Writer) error {
+	return ExportToMarkdown(info, w)
 }
