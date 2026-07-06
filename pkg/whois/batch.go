@@ -39,6 +39,9 @@ type StreamBatchConfig struct {
 
 	// 是否使用代理
 	UseProxy bool `json:"use_proxy"`
+
+	// 是否将成功查询结果落盘到 HistoryProvider（形成采集闭环）
+	SaveToHistory bool `json:"save_to_history,omitempty"`
 }
 
 // DefaultStreamBatchConfig 默认流式批量查询配置
@@ -353,6 +356,12 @@ func (p *StreamBatchProcessor) worker(ctx context.Context, domainChan <-chan str
 		atomic.AddInt64(&p.completed, 1)
 		if result.Error == nil {
 			atomic.AddInt64(&p.successCount, 1)
+			// 落盘到历史快照（若启用）
+			if p.config.SaveToHistory && result.Info != nil {
+				if err := SaveHistorySnapshot(ctx, domain, result.Info, result.RawResponse, "batch"); err != nil {
+					logrus.Warnf("批量查询结果落盘失败 %s: %v", domain, err)
+				}
+			}
 		} else {
 			atomic.AddInt64(&p.failureCount, 1)
 		}
