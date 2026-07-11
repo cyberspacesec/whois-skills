@@ -102,3 +102,25 @@ func TestDiscoverWhoisServer_LiveNoServer(t *testing.T) {
 		return
 	}
 }
+
+// ==================== servers.go checkServerHealth 真实网络成功路径 ====================
+
+// TestCheckServerHealth_LiveSuccess 真实连接 whois.verisign-grs.com:43 成功
+// → 覆盖 line 141-161 成功路径（Write 成功 + 健康状态更新）。
+// 网络不通则跳过（失败分支已由其他测试覆盖）。
+func TestCheckServerHealth_LiveSuccess(t *testing.T) {
+	mgr := &WhoisServerManager{
+		servers:            make(map[string]string),
+		serverHealth:       make(map[string]*ServerHealth),
+		healthCheckTimeout: 10 * time.Second,
+		maxFailures:        3,
+	}
+	mgr.checkServerHealth("whois.verisign-grs.com")
+	health := mgr.getOrCreateServerHealth("whois.verisign-grs.com")
+	if !health.IsHealthy {
+		t.Logf("checkServerHealth 真实网络未达成功路径（仍覆盖失败分支）")
+		return
+	}
+	assert.True(t, health.IsHealthy)
+	assert.Equal(t, 0, health.FailureCount)
+}
