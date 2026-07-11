@@ -88,7 +88,7 @@ func TestQueryASNWithContext_SourceRADB(t *testing.T) {
 	ClearASNDetailCache()
 	info, err := QueryASNWithContext(context.Background(), &ASNQueryOptions{
 		ASN:     13335,
-		Timeout: 8,
+		Timeout: 15,
 		Source:  ASNSourceRADB,
 	})
 	if err != nil {
@@ -99,6 +99,10 @@ func TestQueryASNWithContext_SourceRADB(t *testing.T) {
 	}
 	assert.NotNil(t, info)
 	assert.Equal(t, "radb", info.Source)
+	// 成功路径覆盖 as-name:/descr:/source: 解析分支
+	assert.NotEmpty(t, info.Name)
+	assert.NotEmpty(t, info.Description)
+	assert.NotEmpty(t, info.RIR)
 	ClearASNDetailCache()
 }
 
