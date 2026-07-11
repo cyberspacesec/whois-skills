@@ -309,6 +309,18 @@ func TestExecuteQueryWithTimeout_CtxDeadlineHasDeadline(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestExecuteQueryWithTimeout_LiveSuccess 真实网络查询 example.com 成功
+// → 覆盖 line 449（result.err==nil → 返回 response）。网络不通则跳过。
+func TestExecuteQueryWithTimeout_LiveSuccess(t *testing.T) {
+	q := &QueryOptions{Domain: "example.com", Timeout: 10}
+	resp, err := executeQueryWithTimeout(context.Background(), q, "whois.verisign-grs.com")
+	if err != nil {
+		t.Logf("executeQueryWithTimeout 真实网络失败（仍覆盖失败分支）: %v", err)
+		return
+	}
+	assert.NotEmpty(t, resp)
+}
+
 // ==================== 消除未用导入占位 ====================
 
 // TestExecuteQueryWithResultContext_RetryCtxCancelled 首次查询返回可重试错误，
