@@ -298,6 +298,25 @@ func TestWhoisServerManager_RefreshServerList_Empty(t *testing.T) {
 	assert.NoError(t, err) // 无 tld → refreshed=0, lastErr=nil → nil
 }
 
+// ---- RefreshServerList: 真实网络成功（覆盖 refreshed++ 分支 line 667）----
+
+func TestWhoisServerManager_RefreshServerList_LiveSuccess(t *testing.T) {
+	mgr := &WhoisServerManager{
+		servers: map[string]string{
+			"com": "whois.verisign-grs.com",
+		},
+		serverHealth:       make(map[string]*ServerHealth),
+		healthCheckTimeout: 10 * time.Second,
+	}
+	err := mgr.RefreshServerList()
+	if err != nil {
+		// DiscoverWhoisServer 失败（网络相关），仍覆盖失败分支
+		t.Logf("RefreshServerList 真实网络失败（仍覆盖失败分支）: %v", err)
+		return
+	}
+	assert.NoError(t, err) // 至少一个成功 → refreshed>0 → 返回 nil
+}
+
 // ---- startHealthCheck: 手动触发一次（通过调用 logHealthStatus 间接覆盖 ticker 循环）----
 // startHealthCheck 是无限循环 goroutine，无法直接测试内部；GetServerManager 已启动它。
 

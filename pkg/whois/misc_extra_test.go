@@ -238,16 +238,12 @@ func TestRateLimiter_Wait_GlobalBlockThenAllow(t *testing.T) {
 
 // ==================== idn.go NormalizeDomain IDN 转换错误分支 ====================
 
-// TestNormalizeDomain_IDNConvertError 非法 IDN 字符触发 idna.ToASCII 错误。
-// 注：默认 idna.ToASCII (Punycode profile) 对绝大多数非 ASCII 输入都成功转换，
-// 仅当标签结构非法（如纯非 ASCII 标签产生空/超长 punycode）才报错。
-// 此处用一个已知会让 ToASCII 报错的非 ASCII 结构输入：含非 ASCII 的标签后接空标签。
+// TestNormalizeDomain_IDNConvertError 非法 IDN 标签触发 idna.ToASCII 错误。
+// "xn--测试" 含非 ASCII（isASCII=false）且 ToASCII 报 "invalid label" → 覆盖 line 42-44。
 func TestNormalizeDomain_IDNConvertError(t *testing.T) {
-	// 构造一个非 ASCII 且 ToASCII 必失败的输入较为困难（profile 宽松）。
-	// 这里验证含非 ASCII 但能正常转换的路径（不报错），确认 isASCII=false 分支被覆盖。
-	got, err := NormalizeDomain("πχ.com")
-	assert.NoError(t, err)
-	assert.Equal(t, "xn--1xao.com", got)
+	_, err := NormalizeDomain("xn--测试")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "域名IDN转换失败")
 }
 
 // TestNormalizeDomain_UppercaseHTTPSPathTrimPrefixCaseSensitive TrimPrefix 区分大小写，

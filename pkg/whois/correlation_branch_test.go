@@ -10,6 +10,7 @@ import (
 // ==================== correlation.go 剩余分支 ====================
 
 // TestGenerateClusterSummary_DomainNotInMap cluster 含不在 domainMap 的域名 → info==nil continue。
+// 通过 Correlate → collectSignificantClusters → generateClusterSummary 触发（line 368-369）。
 func TestGenerateClusterSummary_DomainNotInMap(t *testing.T) {
 	e := NewCorrelationEngine()
 	e.AddDomain("a.com", &whoisparser.WhoisInfo{
@@ -23,14 +24,24 @@ func TestGenerateClusterSummary_DomainNotInMap(t *testing.T) {
 		Type:    ClusterByEmail,
 		Key:     "shared@x.com",
 		Domains: []string{"a.com", "ghost.com"}, // ghost.com 不在 domainMap
+		Count:   2,                               // >=2 才会被 collectSignificantClusters 收集
 	}
 	e.mu.Unlock()
 
-	// 通过 GetAssetProfile 触发 generateClusterSummary
-	profile := e.GetAssetProfile("shared@x.com", ClusterByEmail)
-	assert.NotNil(t, profile)
+	// Analyze 会对收集到的 cluster 调 generateClusterSummary
+	result := e.Analyze()
+	assert.NotNil(t, result)
 	// a.com 计入，ghost.com 被跳过
-	assert.GreaterOrEqual(t, profile.TotalDomains, 1)
+	found := false
+	for _, c := range result.Clusters {
+		if c.Key == "shared@x.com" {
+			found = true
+			assert.NotNil(t, c.Summary, "应生成摘要")
+			// a.com 的 registrar RegA 应被收集
+			assert.Equal(t, "RegA", c.Summary.CommonRegistrar)
+		}
+	}
+	assert.True(t, found, "应找到 shared@x.com cluster 摘要")
 }
 
 // TestGetAssetProfile_UnknownEntityType 未知 entityType → 返回 nil。
