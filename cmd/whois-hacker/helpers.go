@@ -53,18 +53,20 @@ func loadConfigFromFile() {
 	// 仅当命令行未显式设置时，才用配置文件的值覆盖。
 	// log 字段在这里覆盖；server/cache/proxy/metrics/alerts 由 serve 子命令的
 	// applyServeConfigFromYAML 覆盖（查询类子命令只用到 log 与 proxy）。
-	if !rootCmd.Flags().Changed("log-level") && cfg.Log.Level != "" {
+	// 注意：这些 flag 均注册在 root 的 PersistentFlags 上，必须用 PersistentFlags().Changed
+	// 检查；root.Flags() 的懒合并 PFlagSet 不会反映 PersistentFlags 的 Changed 状态。
+	if !rootCmd.PersistentFlags().Changed("log-level") && cfg.Log.Level != "" {
 		flagLogLevel = cfg.Log.Level
 		setupLogging()
 	}
-	if !rootCmd.Flags().Changed("log-format") && cfg.Log.Format != "" {
+	if !rootCmd.PersistentFlags().Changed("log-format") && cfg.Log.Format != "" {
 		flagLogFormat = cfg.Log.Format
 		setupLogging()
 	}
-	if !rootCmd.Flags().Changed("use-proxy") {
+	if !rootCmd.PersistentFlags().Changed("use-proxy") {
 		flagUseProxy = cfg.Proxy.Enabled
 	}
-	if !rootCmd.Flags().Changed("proxy-file") && cfg.Proxy.File != "" {
+	if !rootCmd.PersistentFlags().Changed("proxy-file") && cfg.Proxy.File != "" {
 		flagProxyFile = cfg.Proxy.File
 	}
 }
